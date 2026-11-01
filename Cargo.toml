@@ -1,0 +1,17 @@
+[package]
+name = "esf"
+version = "0.0.0-git"
+description = "Read and write esf/1, the plain-text format for EVE Online ship fits"
+authors = ["EVEShipFit Team"]
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/EVEShipFit/esf-format-rust"
+homepage = "https://github.com/EVEShipFit/esf-format"
+keywords = ["eve-online", "fitting", "esf"]
+categories = ["encoding", "parser-implementations", "games"]
+include = ["/src", "/LICENSE", "/README.md"]
+
+[dev-dependencies]
+serde_json = "1.0"
