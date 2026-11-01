@@ -1,0 +1,69 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Lint
+        run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- -D warnings
+          RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: ["1.88", stable]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Check out esf-format
+        uses: actions/checkout@v7
+        with:
+          repository: EVEShipFit/esf-format
+          ref: v1.0
+          path: esf-format
+
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Run the test cases
+        run: |
+          cargo build --locked --example program
+          uv run --project esf-format/tools esf-test -- target/debug/examples/program
+
+      - name: Run the unit tests
+        run: cargo llvm-cov --locked --summary-only | tee coverage.txt
+
+      - name: Report coverage
+        run: |
+          { echo '```'; cat coverage.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
