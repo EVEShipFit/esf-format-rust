@@ -2,7 +2,8 @@
 
 use std::collections::HashMap;
 
-use esf::{AttributeRecord, Catalog, Kind, MutaplasmidRecord, TypeRecord, fold};
+use esf::sde::name_index;
+use esf::{AttributeRecord, Catalog, Kind, MutaplasmidRecord, TypeRecord};
 use serde_json::Value;
 
 pub struct JsonCatalog {
@@ -38,17 +39,13 @@ fn kind(name: &str) -> Kind {
     }
 }
 
-/// Where names are shared, published wins, then the lowest ID (§4.2).
-fn by_name(entries: &[Value]) -> HashMap<String, u32> {
-    let mut sorted: Vec<&Value> = entries.iter().collect();
-    sorted.sort_by_key(|e| (!e["published"].as_bool().unwrap(), id(&e["id"])));
-    let mut index = HashMap::new();
-    for e in sorted {
-        index
-            .entry(fold(e["name"].as_str().unwrap()))
-            .or_insert(id(&e["id"]));
-    }
-    index
+fn names(entries: &Value) -> HashMap<String, u32> {
+    name_index(
+        entries.as_array().unwrap(),
+        |e| id(&e["id"]),
+        |e| e["name"].as_str().unwrap(),
+        |e| e["published"].as_bool().unwrap(),
+    )
 }
 
 impl JsonCatalog {
@@ -110,8 +107,8 @@ impl JsonCatalog {
         JsonCatalog {
             types,
             attributes,
-            type_names: by_name(data["types"].as_array().unwrap()),
-            attribute_names: by_name(data["attributes"].as_array().unwrap()),
+            type_names: names(&data["types"]),
+            attribute_names: names(&data["attributes"]),
             modes,
             mutaplasmids,
         }
@@ -119,16 +116,16 @@ impl JsonCatalog {
 }
 
 impl Catalog for JsonCatalog {
-    fn type_by_name(&self, folded: &str) -> Option<&TypeRecord> {
-        self.types.get(self.type_names.get(folded)?)
+    fn type_by_name(&self, folded_name: &str) -> Option<&TypeRecord> {
+        self.types.get(self.type_names.get(folded_name)?)
     }
 
     fn type_by_id(&self, type_id: u32) -> Option<&TypeRecord> {
         self.types.get(&type_id)
     }
 
-    fn attribute_by_name(&self, folded: &str) -> Option<&AttributeRecord> {
-        self.attributes.get(self.attribute_names.get(folded)?)
+    fn attribute_by_name(&self, folded_name: &str) -> Option<&AttributeRecord> {
+        self.attributes.get(self.attribute_names.get(folded_name)?)
     }
 
     fn attribute_by_id(&self, attribute_id: u32) -> Option<&AttributeRecord> {
