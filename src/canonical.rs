@@ -86,6 +86,7 @@ impl<'a> CanonLine<'a> {
             overrides: self.overrides.iter().map(|(a, v)| (a.id, *v)).collect(),
             state: self.state,
             location: self.location,
+            slot: None,
         }
     }
 }

@@ -28,7 +28,8 @@ pub struct EsfFit {
 ///
 /// Only [`type_id`](Entry::type_id) is needed; every other field is `None` or empty when it
 /// is the default, so start from [`Entry::default()`]. Entries can be in any order, except
-/// within a rack: there, the order is the slot order.
+/// within a rack: there, the order is the slot order, unless an entry sets
+/// [`slot`](Entry::slot).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Entry {
     /// The type ID of the item, like 2889 for a 200mm AutoCannon II.
@@ -76,6 +77,15 @@ pub struct Entry {
     pub state: Option<State>,
     /// Where the item goes. `None` means where its type goes by default; see [`Location`].
     pub location: Option<Location>,
+    /// The slot in the [`location`](Entry::location) rack, counting from 1, like 3 for the
+    /// third high slot.
+    ///
+    /// Set [`location`](Entry::location) to the rack too, and the item must go in that rack.
+    /// A pinned entry is one item, so leave [`count`](Entry::count) as `None`. Two entries
+    /// cannot pin the same slot. `None` means the next free slot.
+    /// [`load`](crate::load) never sets this: it gives the rack in slot order, with empty
+    /// slots in between.
+    pub slot: Option<u32>,
 }
 
 /// Whether an item is offline, online or running, when that is not its default (esf/1 spec
@@ -120,24 +130,25 @@ impl fmt::Display for State {
 /// it to store an item somewhere else, like a spare Damage Control II in
 /// [`Cargo`](Location::Cargo).
 ///
-/// The racks, [`High`](Location::High) to [`Svc`](Location::Svc), are only for empty slots.
-/// An item never names its rack. The holds, [`Ammo`](Location::Ammo) to
+/// The racks, [`High`](Location::High) to [`Svc`](Location::Svc), are for empty slots, and
+/// for an item put in a given [`Entry::slot`]. Otherwise, an item never names its rack. The
+/// holds, [`Ammo`](Location::Ammo) to
 /// [`Subsystem`](Location::Subsystem), only make sense on a hull that has that hold, but the
 /// library does not check that.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Location {
-    /// The high slot rack, for an empty slot.
+    /// The high slot rack.
     High = 1,
-    /// The mid slot rack, for an empty slot.
+    /// The mid slot rack.
     Mid,
-    /// The low slot rack, for an empty slot.
+    /// The low slot rack.
     Low,
-    /// The rig rack, for an empty slot.
+    /// The rig rack.
     Rig,
-    /// The subsystem rack, for an empty slot. Not the same as [`Subsystem`](Location::Subsystem),
+    /// The subsystem rack. Not the same as [`Subsystem`](Location::Subsystem),
     /// which is a hold.
     Sub,
-    /// The structure service rack, for an empty slot.
+    /// The structure service rack.
     Svc,
     /// The cargo hold.
     Cargo,
