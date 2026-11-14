@@ -10,6 +10,7 @@ mod model;
 mod names;
 mod number;
 mod resolve;
+pub mod sde;
 mod source;
 mod text;
 mod wire;

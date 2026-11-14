@@ -506,16 +506,16 @@ fn binary_invalid() {
 struct Minimal;
 
 impl Catalog for Minimal {
-    fn type_by_name(&self, folded: &str) -> Option<&TypeRecord> {
-        CATALOG.type_by_name(folded)
+    fn type_by_name(&self, folded_name: &str) -> Option<&TypeRecord> {
+        CATALOG.type_by_name(folded_name)
     }
 
     fn type_by_id(&self, type_id: u32) -> Option<&TypeRecord> {
         CATALOG.type_by_id(type_id)
     }
 
-    fn attribute_by_name(&self, folded: &str) -> Option<&AttributeRecord> {
-        CATALOG.attribute_by_name(folded)
+    fn attribute_by_name(&self, folded_name: &str) -> Option<&AttributeRecord> {
+        CATALOG.attribute_by_name(folded_name)
     }
 
     fn attribute_by_id(&self, attribute_id: u32) -> Option<&AttributeRecord> {
@@ -538,16 +538,16 @@ fn catalog_without_optional_lookups() {
 struct WithoutRollAttributes;
 
 impl Catalog for WithoutRollAttributes {
-    fn type_by_name(&self, folded: &str) -> Option<&TypeRecord> {
-        CATALOG.type_by_name(folded)
+    fn type_by_name(&self, folded_name: &str) -> Option<&TypeRecord> {
+        CATALOG.type_by_name(folded_name)
     }
 
     fn type_by_id(&self, type_id: u32) -> Option<&TypeRecord> {
         CATALOG.type_by_id(type_id)
     }
 
-    fn attribute_by_name(&self, folded: &str) -> Option<&AttributeRecord> {
-        CATALOG.attribute_by_name(folded)
+    fn attribute_by_name(&self, folded_name: &str) -> Option<&AttributeRecord> {
+        CATALOG.attribute_by_name(folded_name)
     }
 
     fn attribute_by_id(&self, _attribute_id: u32) -> Option<&AttributeRecord> {
@@ -571,16 +571,16 @@ fn catalog_missing_roll_attribute() {
 struct NewlineNames(TypeRecord);
 
 impl Catalog for NewlineNames {
-    fn type_by_name(&self, folded: &str) -> Option<&TypeRecord> {
-        CATALOG.type_by_name(folded)
+    fn type_by_name(&self, folded_name: &str) -> Option<&TypeRecord> {
+        CATALOG.type_by_name(folded_name)
     }
 
     fn type_by_id(&self, _type_id: u32) -> Option<&TypeRecord> {
         Some(&self.0)
     }
 
-    fn attribute_by_name(&self, folded: &str) -> Option<&AttributeRecord> {
-        CATALOG.attribute_by_name(folded)
+    fn attribute_by_name(&self, folded_name: &str) -> Option<&AttributeRecord> {
+        CATALOG.attribute_by_name(folded_name)
     }
 
     fn attribute_by_id(&self, attribute_id: u32) -> Option<&AttributeRecord> {
