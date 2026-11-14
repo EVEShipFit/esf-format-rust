@@ -80,7 +80,9 @@ pub struct Entry {
     /// The slot in the [`location`](Entry::location) rack, counting from 1, like 3 for the
     /// third high slot.
     ///
-    /// Set [`location`](Entry::location) to the rack too. `None` means the next free slot.
+    /// Set [`location`](Entry::location) to the rack too, and the item must go in that rack.
+    /// A pinned entry is one item, so leave [`count`](Entry::count) as `None`. Two entries
+    /// cannot pin the same slot. `None` means the next free slot.
     /// [`load`](crate::load) never sets this: it gives the rack in slot order, with empty
     /// slots in between.
     pub slot: Option<u32>,

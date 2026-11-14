@@ -215,6 +215,33 @@ fn save_slots() {
 }
 
 #[test]
+fn save_binary_slots() {
+    let fits = [rifter(vec![
+        entry(AUTOCANNON),
+        Entry {
+            location: Some(Location::High),
+            slot: Some(3),
+            ..entry(AUTOCANNON)
+        },
+    ])];
+    let binary = esf::save_binary(&fits, &*CATALOG).unwrap();
+    assert_eq!(load(binary).unwrap(), load(save(&fits).unwrap()).unwrap());
+}
+
+#[test]
+fn save_slot_without_a_hull() {
+    let fit = EsfFit {
+        entries: vec![Entry {
+            location: Some(Location::High),
+            slot: Some(1),
+            ..entry(AUTOCANNON)
+        }],
+        ..EsfFit::default()
+    };
+    assert_error(save(&[fit]), "without a ship stores everything in cargo");
+}
+
+#[test]
 fn save_invalid() {
     let invalid: [(&[EsfFit], &str); 22] = [
         (&[], "at least one fit"),
