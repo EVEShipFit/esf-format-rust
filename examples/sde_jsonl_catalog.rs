@@ -2,6 +2,8 @@
 //!
 //! `cargo run --example sde_jsonl_catalog -- <SDE directory> < fit.esf` prints the fit in
 //! canonical form.
+//!
+//! To use it in your project, add `serde_json = "1"` to your dependencies and drop `main`.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs::File;
@@ -44,7 +46,10 @@ fn invalid(message: String) -> io::Error {
 }
 
 fn rows(dir: &Path, name: &str, mut each: impl FnMut(&Value) -> io::Result<()>) -> io::Result<()> {
-    for line in BufReader::new(File::open(dir.join(name))?).lines() {
+    let path = dir.join(name);
+    let file = File::open(&path)
+        .map_err(|e| io::Error::new(e.kind(), format!("{}: {e}", path.display())))?;
+    for line in BufReader::new(file).lines() {
         each(&serde_json::from_str(&line?)?)?;
     }
     Ok(())
@@ -121,7 +126,7 @@ impl SdeJsonlCatalog {
             for a in list(row, "dogmaAttributes") {
                 values.insert(int(a, "attributeID")?, float(a, "value"));
             }
-            let squadron_size = sde::squadron_size(&values);
+            let squadron_size = sde::squadron_size(values.iter().map(|(&id, &value)| (id, value)));
             values.retain(|id, _| rollable.contains(id));
             let effects = effects.collect::<io::Result<_>>()?;
             dogma.insert(
@@ -157,7 +162,7 @@ impl SdeJsonlCatalog {
                 TypeRecord {
                     id,
                     name: name.to_string(),
-                    kind: sde::kind(category_id, group_id, effects),
+                    kind: sde::kind(category_id, group_id, effects.iter().copied()),
                     active: sde::active(categories),
                     capacity: float(t, "capacity"),
                     volume: float(t, "volume"),

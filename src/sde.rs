@@ -3,7 +3,6 @@
 //!
 //! Each helper takes plain values from the SDE files, so it works however you load them.
 
-use std::borrow::Borrow;
 use std::collections::HashMap;
 
 use crate::{Kind, fold};
@@ -40,6 +39,7 @@ const ATTRIBUTE_SQUADRON_SIZE: u32 = 2215;
 /// `category_id` is the `categoryID` of the type's group, in `groups.jsonl`.
 /// `group_id` is the type's `groupID`, in `types.jsonl`.
 /// `effect_ids` are the `effectID`s in the type's `dogmaEffects`, in `typeDogma.jsonl`.
+/// The first slot effect in `effect_ids` wins, so pass them in the order of the file.
 ///
 /// ```
 /// use esf::Kind;
@@ -47,11 +47,7 @@ const ATTRIBUTE_SQUADRON_SIZE: u32 = 2215;
 /// // 200mm AutoCannon II: category Module, group Projectile Weapon, effect hiPower among others.
 /// assert_eq!(esf::sde::kind(7, 55, [16, 12, 34]), Kind::High);
 /// ```
-pub fn kind(
-    category_id: u32,
-    group_id: u32,
-    effect_ids: impl IntoIterator<Item = impl Borrow<u32>>,
-) -> Kind {
+pub fn kind(category_id: u32, group_id: u32, effect_ids: impl IntoIterator<Item = u32>) -> Kind {
     if group_id == GROUP_SHIP_MODIFIERS {
         return Kind::Mode;
     }
@@ -68,7 +64,7 @@ pub fn kind(
             .find_map(|effect_id| {
                 SLOT_EFFECTS
                     .iter()
-                    .find(|(slot, _)| slot == effect_id.borrow())
+                    .find(|&&(slot, _)| slot == effect_id)
                     .map(|&(_, kind)| kind)
             })
             .unwrap_or(Kind::Other),
@@ -84,8 +80,8 @@ pub fn kind(
 /// Works out whether a type runs when it is turned on (§6.4), for [`TypeRecord::active`](crate::TypeRecord::active).
 ///
 /// `effects` gives, for each `effectID` in the type's `dogmaEffects` (in `typeDogma.jsonl`),
-/// that effect's `effectCategoryID` (in `dogmaEffects.jsonl`). A `HashMap<u32, u32>`, a
-/// reference to one, or a list of pairs all work.
+/// that effect's `effectCategoryID` (in `dogmaEffects.jsonl`). A `HashMap<u32, u32>` or a
+/// list of pairs both work.
 ///
 /// A type runs when one of its effects is in category 1 (active) or 2 (target).
 /// The SDE puts the `online` effect in category 1 too, but going online is not
@@ -97,10 +93,9 @@ pub fn kind(
 /// // 200mm AutoCannon II: online and projectileFired (34, category 2).
 /// assert!(esf::sde::active([(16, 1), (34, 2)]));
 /// ```
-pub fn active(effects: impl IntoIterator<Item = (impl Borrow<u32>, impl Borrow<u32>)>) -> bool {
+pub fn active(effects: impl IntoIterator<Item = (u32, u32)>) -> bool {
     effects.into_iter().any(|(effect_id, category)| {
-        let category = *category.borrow();
-        *effect_id.borrow() != EFFECT_ONLINE
+        effect_id != EFFECT_ONLINE
             && (category == EFFECT_CATEGORY_ACTIVE || category == EFFECT_CATEGORY_TARGET)
     })
 }
@@ -108,20 +103,18 @@ pub fn active(effects: impl IntoIterator<Item = (impl Borrow<u32>, impl Borrow<u
 /// Reads how many fighters make up a full squadron, for [`TypeRecord::squadron_size`](crate::TypeRecord::squadron_size).
 ///
 /// `attributes` gives, for each `attributeID` in the type's `dogmaAttributes`
-/// (in `typeDogma.jsonl`), its `value`. A `HashMap<u32, f64>`, a reference to one, or a
-/// list of pairs all work. Returns `None` when the type has no
-/// `fighterSquadronMaxSize` (2215), which only fighters have.
+/// (in `typeDogma.jsonl`), its `value`. A `HashMap<u32, f64>` or a list of pairs both
+/// work. Returns `None` when the type has no `fighterSquadronMaxSize` (2215), which only
+/// fighters have.
 ///
 /// ```
 /// assert_eq!(esf::sde::squadron_size([(9, 100.0), (2215, 6.0)]), Some(6));
 /// ```
-pub fn squadron_size(
-    attributes: impl IntoIterator<Item = (impl Borrow<u32>, impl Borrow<f64>)>,
-) -> Option<u32> {
+pub fn squadron_size(attributes: impl IntoIterator<Item = (u32, f64)>) -> Option<u32> {
     attributes
         .into_iter()
-        .find(|(attribute_id, _)| *attribute_id.borrow() == ATTRIBUTE_SQUADRON_SIZE)
-        .map(|(_, value)| *value.borrow() as u32)
+        .find(|&(attribute_id, _)| attribute_id == ATTRIBUTE_SQUADRON_SIZE)
+        .map(|(_, value)| value as u32)
 }
 
 /// Finds which hull a tactical mode belongs to, for [`Catalog::modes`](crate::Catalog::modes).
@@ -167,15 +160,15 @@ pub fn mode_hull(mode_name: &str, ship_names: &HashMap<String, u32>) -> Option<u
 /// let index = esf::sde::name_index(&types, |t| t.id, |t| &t.name, |t| t.published);
 /// assert_eq!(index["avatar"], 11567);
 /// ```
-pub fn name_index<T>(
+pub fn name_index<T, S: AsRef<str>>(
     entries: impl IntoIterator<Item = T>,
     id: impl Fn(&T) -> u32,
-    name: impl Fn(&T) -> &str,
+    name: impl Fn(&T) -> S,
     published: impl Fn(&T) -> bool,
 ) -> HashMap<String, u32> {
     let mut sorted: Vec<(bool, u32, String)> = entries
         .into_iter()
-        .map(|e| (!published(&e), id(&e), fold(name(&e))))
+        .map(|e| (!published(&e), id(&e), fold(name(&e).as_ref())))
         .collect();
     sorted.sort_unstable();
     let mut index = HashMap::with_capacity(sorted.len());
@@ -242,22 +235,26 @@ mod tests {
             ("Veldspar", 25, 462, &[], Kind::Other),
         ];
         for (name, category_id, group_id, effect_ids, expected) in cases {
+            let effect_ids = effect_ids.iter().copied();
             assert_eq!(kind(category_id, group_id, effect_ids), expected, "{name}");
         }
+        assert_eq!(kind(7, 1, []), Kind::Other);
     }
 
     #[test]
     fn active_needs_an_active_or_target_effect() {
-        assert!(!active(HashMap::<u32, u32>::new()));
+        assert!(!active([]));
+        assert!(!active(HashMap::new()));
         assert!(!active([(16, 1), (2302, 0)]));
         assert!(active([(16, 1), (4, 1)]));
-        assert!(active(&HashMap::from([(16, 1), (3174, 2)])));
+        assert!(active(HashMap::from([(16, 1), (3174, 2)])));
     }
 
     #[test]
     fn squadron_size_of_a_fighter() {
         assert_eq!(squadron_size([(9, 100.0), (2215, 6.0)]), Some(6));
-        assert_eq!(squadron_size(&HashMap::from([(9, 240.0)])), None);
+        assert_eq!(squadron_size(HashMap::from([(9, 240.0)])), None);
+        assert_eq!(squadron_size([]), None);
     }
 
     #[test]
@@ -308,5 +305,11 @@ mod tests {
             ("rifter".to_string(), 587),
         ]);
         assert_eq!(index, expected);
+    }
+
+    #[test]
+    fn name_index_takes_owned_names() {
+        let index = name_index([(1, "Rifter")], |e| e.0, |e| e.1.to_string(), |_| true);
+        assert_eq!(index["rifter"], 1);
     }
 }

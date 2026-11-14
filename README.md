@@ -114,21 +114,21 @@ fn type_names(types: &[SdeType]) -> HashMap<String, u32> {
     sde::name_index(types, |t| t.id, |t| &t.name, |t| t.published)
 }
 
-// effects: effectID -> effectCategoryID; attributes: attributeID -> value
+// effects: (effectID, effectCategoryID) in file order; attributes: (attributeID, value)
 fn record(
     t: &SdeType,
     category_id: u32,
-    effects: &HashMap<u32, u32>,
-    attributes: &HashMap<u32, f64>,
+    effects: &[(u32, u32)],
+    attributes: &[(u32, f64)],
 ) -> TypeRecord {
     TypeRecord {
         id: t.id,
         name: t.name.clone(),
-        kind: sde::kind(category_id, t.group_id, effects.keys()),
-        active: sde::active(effects),
+        kind: sde::kind(category_id, t.group_id, effects.iter().map(|&(id, _)| id)),
+        active: sde::active(effects.iter().copied()),
         capacity: t.capacity.unwrap_or(0.0),
         volume: t.volume.unwrap_or(0.0),
-        squadron_size: sde::squadron_size(attributes),
+        squadron_size: sde::squadron_size(attributes.iter().copied()),
     }
 }
 ```
