@@ -173,8 +173,50 @@ fn binary_round_trip() {
 }
 
 #[test]
+fn save_slots() {
+    let empty = |location| Entry {
+        location: Some(location),
+        ..Entry::default()
+    };
+    let pinned = rifter(vec![
+        entry(AUTOCANNON),
+        Entry {
+            location: Some(Location::High),
+            slot: Some(3),
+            ..entry(AUTOCANNON)
+        },
+        Entry {
+            slot: Some(1),
+            ..empty(Location::Low)
+        },
+        entry(DAMAGE_CONTROL),
+    ]);
+    let text = save(&[pinned]).unwrap();
+    assert_eq!(
+        text,
+        "%esf/1\n\
+         Rifter\n\
+         \n\
+         200mm AutoCannon II\n\
+         - @high\n\
+         200mm AutoCannon II\n\
+         \n\
+         - @low\n\
+         Damage Control II\n"
+    );
+    let want = rifter(vec![
+        entry(AUTOCANNON),
+        empty(Location::High),
+        entry(AUTOCANNON),
+        empty(Location::Low),
+        entry(DAMAGE_CONTROL),
+    ]);
+    assert_eq!(load(text).unwrap(), [want]);
+}
+
+#[test]
 fn save_invalid() {
-    let invalid: [(&[EsfFit], &str); 16] = [
+    let invalid: [(&[EsfFit], &str); 22] = [
         (&[], "at least one fit"),
         (
             &[rifter(vec![Entry::default()])],
@@ -236,7 +278,62 @@ fn save_invalid() {
                 location: Some(Location::High),
                 ..entry(AUTOCANNON)
             }])],
-            "only for an empty slot",
+            "only to pin a slot",
+        ),
+        (
+            &[rifter(vec![Entry {
+                location: Some(Location::High),
+                slot: Some(0),
+                ..entry(AUTOCANNON)
+            }])],
+            "at least 1",
+        ),
+        (
+            &[rifter(vec![Entry {
+                slot: Some(1),
+                ..entry(AUTOCANNON)
+            }])],
+            "needs the rack",
+        ),
+        (
+            &[rifter(vec![Entry {
+                count: Some(2),
+                location: Some(Location::High),
+                slot: Some(1),
+                ..entry(AUTOCANNON)
+            }])],
+            "mutually exclusive",
+        ),
+        (
+            &[rifter(vec![Entry {
+                location: Some(Location::Low),
+                slot: Some(1),
+                ..entry(AUTOCANNON)
+            }])],
+            "does not go in the low rack",
+        ),
+        (
+            &[rifter(vec![Entry {
+                location: Some(Location::Cargo),
+                slot: Some(1),
+                ..entry(EMP)
+            }])],
+            "needs the rack",
+        ),
+        (
+            &[rifter(vec![
+                Entry {
+                    location: Some(Location::High),
+                    slot: Some(1),
+                    ..entry(AUTOCANNON)
+                },
+                Entry {
+                    location: Some(Location::High),
+                    slot: Some(1),
+                    ..entry(AUTOCANNON)
+                },
+            ])],
+            "pinned twice",
         ),
         (
             &[rifter(vec![Entry {

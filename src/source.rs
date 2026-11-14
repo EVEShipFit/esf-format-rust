@@ -29,8 +29,14 @@ fn entry(e: &Entry, catalog: &dyn Catalog) -> Result<String, Error> {
     if e.count == Some(0) || e.charge_count == Some(0) {
         return Err(Error::new("a count must be at least 1"));
     }
-    if e.type_id.is_some() && e.location.is_some_and(Location::is_rack) {
-        return Err(Error::new("a rack location is only for an empty slot"));
+    if e.slot == Some(0) {
+        return Err(Error::new("a slot must be at least 1"));
+    }
+    if e.slot.is_some() && !e.location.is_some_and(Location::is_rack) {
+        return Err(Error::new("a slot needs the rack it is in"));
+    }
+    if e.type_id.is_some() && e.slot.is_none() && e.location.is_some_and(Location::is_rack) {
+        return Err(Error::new("an item names a rack only to pin a slot"));
     }
     if e.charge_count.is_some() && e.charge.is_none() {
         return Err(Error::new("a charge count is set without a charge"));
@@ -76,7 +82,8 @@ fn entry(e: &Entry, catalog: &dyn Catalog) -> Result<String, Error> {
         parts.push(format!("!{state}"));
     }
     if let Some(location) = e.location {
-        parts.push(format!("@{location}"));
+        let slot = e.slot.map_or(String::new(), |slot| slot.to_string());
+        parts.push(format!("@{location}{slot}"));
     }
     Ok(parts.join(" "))
 }

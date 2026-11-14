@@ -68,7 +68,8 @@ Each `Entry` is one line of the fit. `None` means the default:
 | `mutaplasmid` | The mutaplasmid applied. | |
 | `overrides` | Attribute values by attribute ID. | |
 | `state` | `State::Off`, `On` or `Heat`. | Active if the type can be, else on. |
-| `location` | `Cargo`, `Bay` or another hold; a rack only for an empty slot. | Where the type goes by default. |
+| `location` | `Cargo`, `Bay` or another hold; a rack for an empty slot, or with `slot`. | Where the type goes by default. |
+| `slot` | The slot in the `location` rack, counting from 1. `load()` never sets it: it returns the rack in slot order, with empty slots between. | The next free slot. |
 
 ## The Catalog
 
