@@ -137,6 +137,26 @@ fn record(
 [examples/sde_jsonl_catalog.rs](https://github.com/EVEShipFit/esf-format-rust/blob/main/examples/sde_jsonl_catalog.rs)
 is a complete example on the official SDE in JSONL: copy it into your project.
 
+## ESI
+
+ESI gives each item in a ship a `location_flag`. `esf::esi` turns it into a
+location and a slot:
+
+```rust
+fn entry(type_id: u32, flag: &str) -> esf::Entry {
+    esf::Entry {
+        type_id: Some(type_id),
+        location: Some(esf::esi::location(flag).unwrap_or(esf::Location::Cargo)),
+        slot: esf::esi::slot(flag),
+        ..esf::Entry::default()
+    }
+}
+```
+
+`HiSlot2` gives `High` and slot 3, and `ShipHangar` gives `Maintenance`.
+A flag that is not inside a ship, like `Hangar`, gives `None`; the example puts
+those items in the cargo hold.
+
 ## Tests
 
 The test cases live in [esf-format](https://github.com/EVEShipFit/esf-format):

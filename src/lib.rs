@@ -5,6 +5,7 @@ mod binary;
 mod canonical;
 mod catalog;
 mod error;
+pub mod esi;
 mod fold_table;
 mod model;
 mod names;
