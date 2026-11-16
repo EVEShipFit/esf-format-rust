@@ -144,6 +144,8 @@ pub trait Catalog {
 
     /// Finds an attribute by its name, like "speedfactor".
     ///
+    /// Used to read attribute overrides, like the rolls on an abyssal module.
+    ///
     /// This works the same way as [`type_by_name`](Catalog::type_by_name): the name is
     /// already case-folded with [`fold`](crate::fold), unpublished attributes count too, and
     /// where names are shared, the published one wins, then the lowest ID.
@@ -152,7 +154,11 @@ pub trait Catalog {
     /// Return `None` if no attribute has this name.
     fn attribute_by_name(&self, folded_name: &str) -> Option<&AttributeRecord>;
 
-    /// Finds an attribute by its ID. Return `None` if there is no attribute with this ID.
+    /// Finds an attribute by its ID.
+    ///
+    /// Used to write attribute overrides, like the rolls on an abyssal module.
+    ///
+    /// Return `None` if there is no attribute with this ID.
     fn attribute_by_id(&self, attribute_id: u32) -> Option<&AttributeRecord>;
 
     /// The tactical modes a hull can be in, like the Hecate's Defense, Propulsion and
