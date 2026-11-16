@@ -3,7 +3,7 @@
 use crate::catalog::{attribute_of, full_load};
 use crate::names::{fold, shortest_unique};
 use crate::number;
-use crate::resolve::{Fit, Item, Place, Run, Slot, default_place, kind_place, mode_name};
+use crate::resolve::{Fit, Item, Place, Slot, default_place, kind_place, mode_name};
 use crate::text::{SIGILS, is_count};
 use crate::{
     AttributeRecord, Catalog, Entry, Error, EsfFit, Location, MutaplasmidRecord, State, TypeRecord,
@@ -177,8 +177,10 @@ fn collapse(lines: Vec<(bool, CanonLine<'_>)>) -> Result<Vec<CanonLine<'_>>, Err
     }
     Ok(out
         .into_iter()
-        .map(|(_, mut line)| {
-            line.count = line.count.filter(|&count| count != 1);
+        .map(|(repeatable, mut line)| {
+            if repeatable {
+                line.count = line.count.filter(|&count| count != 1);
+            }
             line
         })
         .collect())
@@ -289,28 +291,42 @@ impl<'a> Context<'_, 'a> {
         })
     }
 
-    fn runs(&self, rack: Location) -> &[Run] {
+    fn rack(&self, rack: Location) -> Result<Vec<CanonLine<'a>>, Error> {
         let mut runs = self.fit.rack(rack);
         while let [rest @ .., last] = runs
             && last.item.is_none()
         {
             runs = rest;
         }
-        runs
-    }
-
-    fn rack(&self, rack: Location) -> Result<Vec<CanonLine<'a>>, Error> {
-        let runs = self.runs(rack);
         let mut lines = Vec::with_capacity(runs.len());
         for run in runs {
-            let mut line = match run.item.map(|at| &self.fit.slots[at]) {
-                Some(Slot::Item(item)) => self.line(item)?,
-                _ => CanonLine::empty(rack),
-            };
-            line.count = Some(run.length);
-            lines.push((true, line));
+            match run.item.map(|at| &self.fit.slots[at]) {
+                Some(Slot::Item(item)) if rack == Location::Tube => {
+                    lines.push((false, self.squadron(item)?));
+                }
+                Some(Slot::Item(item)) => {
+                    let mut line = self.line(item)?;
+                    line.count = Some(run.length);
+                    lines.push((true, line));
+                }
+                _ => {
+                    let mut line = CanonLine::empty(rack);
+                    line.count = Some(run.length);
+                    lines.push((true, line));
+                }
+            }
         }
         collapse(lines)
+    }
+
+    fn squadron(&self, item: &Item<'a>) -> Result<CanonLine<'a>, Error> {
+        let mut line = self.line(item)?;
+        let count = item
+            .line
+            .count
+            .filter(|&count| Some(count) != item.r#type.squadron_size);
+        line.count = count.map(u64::from);
+        Ok(line)
     }
 
     fn sorted(&self, items: &[&Item<'a>]) -> Result<Vec<CanonLine<'a>>, Error> {
@@ -337,28 +353,7 @@ impl<'a> Context<'_, 'a> {
     }
 
     fn fighters(&self, items: &[&Item<'a>]) -> Result<Vec<CanonLine<'a>>, Error> {
-        let mut lines = Vec::new();
-        let runs = self.runs(Location::Tube);
-        for chunk in runs.chunk_by(|a, b| a.item.is_none() && b.item.is_none()) {
-            if let [run] = chunk
-                && let Some(Slot::Item(item)) = run.item.map(|at| &self.fit.slots[at])
-            {
-                let mut line = self.line(item)?;
-                let count = item
-                    .line
-                    .count
-                    .filter(|&count| Some(count) != item.r#type.squadron_size);
-                line.count = count.map(u64::from);
-                lines.push(line);
-                continue;
-            }
-            let empty = chunk.iter().map(|run| {
-                let mut line = CanonLine::empty(Location::Tube);
-                line.count = Some(run.length);
-                (true, line)
-            });
-            lines.extend(collapse(empty.collect())?);
-        }
+        let mut lines = self.rack(Location::Tube)?;
         lines.extend(self.sorted(&only(items, Place::At(Location::Bay)))?);
         Ok(lines)
     }
