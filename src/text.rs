@@ -13,13 +13,25 @@ pub(crate) struct EmptyLine {
     pub index: Option<u32>,
 }
 
+/// A type as written: by name, or by type ID (SPEC §6.13).
+pub(crate) enum TypeRef<'a> {
+    Name(Cow<'a, str>),
+    Id(u32),
+}
+
+impl Default for TypeRef<'_> {
+    fn default() -> Self {
+        TypeRef::Name(Cow::Borrowed(""))
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct ItemLine<'a> {
     pub number: usize,
-    pub name: Cow<'a, str>,
+    pub name: TypeRef<'a>,
     pub count: Option<u32>,
     pub fit_name: Option<Cow<'a, str>>,
-    pub charge: Option<Cow<'a, str>>,
+    pub charge: Option<TypeRef<'a>>,
     pub charge_count: Option<u32>,
     pub mutaplasmid: Option<Cow<'a, str>>,
     pub overrides: Vec<(&'a str, &'a str)>,
@@ -35,7 +47,7 @@ pub(crate) enum Line<'a> {
 
 pub(crate) struct FitBlock<'a> {
     pub hull_line: usize,
-    pub hull: Option<Cow<'a, str>>,
+    pub hull: Option<TypeRef<'a>>,
     pub fit_name: Option<Cow<'a, str>>,
     pub mode: Option<Cow<'a, str>>,
     pub lines: Vec<Line<'a>>,
@@ -44,6 +56,11 @@ pub(crate) struct FitBlock<'a> {
 pub(crate) fn is_count(token: &str) -> bool {
     token
         .strip_suffix('x')
+        .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+}
+
+pub(crate) fn is_type_id(name: &str) -> bool {
+    name.strip_prefix('#')
         .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
 }
 
@@ -199,6 +216,22 @@ impl<'a> Cursor<'a> {
         Ok(Cow::Owned(words.join(" ")))
     }
 
+    fn type_ref(&mut self) -> Parsed<TypeRef<'a>> {
+        let quoted = self.peek() == Some(b'"');
+        let name = self.type_name()?;
+        if quoted || !is_type_id(&name) {
+            return Ok(TypeRef::Name(name));
+        }
+        let digits = name[1..].trim_start_matches('0');
+        if digits.is_empty() {
+            return Ok(TypeRef::Id(0));
+        }
+        digits
+            .parse()
+            .map(TypeRef::Id)
+            .or_else(|_| self.error("a type ID is too large"))
+    }
+
     fn location(&mut self) -> Parsed<(Location, Option<u32>)> {
         let token = self.token();
         self.i += 1;
@@ -303,7 +336,7 @@ fn hull<'a>(cur: &mut Cursor<'a>) -> Parsed<FitBlock<'a>> {
     if is_count(cur.token()) {
         return cur.error("the hull line cannot have a count");
     }
-    block.hull = Some(cur.type_name()?);
+    block.hull = Some(cur.type_ref()?);
     let mut more = cur.next_element()?;
     if more && cur.peek() == Some(b'"') {
         block.fit_name = Some(cur.quoted()?);
@@ -350,7 +383,7 @@ fn entry<'a>(cur: &mut Cursor<'a>) -> Parsed<Line<'a>> {
 
     let mut line = ItemLine {
         number: cur.number,
-        name: cur.type_name()?,
+        name: cur.type_ref()?,
         count,
         ..ItemLine::default()
     };
@@ -378,7 +411,7 @@ fn entry<'a>(cur: &mut Cursor<'a>) -> Parsed<Line<'a>> {
             Some(b':') if stage < 1 => {
                 cur.i += 1;
                 line.charge_count = cur.count()?;
-                line.charge = Some(cur.type_name()?);
+                line.charge = Some(cur.type_ref()?);
                 stage = 1;
             }
             Some(b'+') if stage < 2 => {

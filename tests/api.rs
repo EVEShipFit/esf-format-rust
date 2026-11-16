@@ -308,7 +308,7 @@ fn save_slot_without_a_hull() {
 
 #[test]
 fn save_invalid() {
-    let invalid: [(&[EsfFit], &str); 24] = [
+    let invalid: [(&[EsfFit], &str); 23] = [
         (&[], "at least one fit"),
         (
             &[rifter(vec![Entry::default()])],
@@ -463,13 +463,6 @@ fn save_invalid() {
             }])],
             "not finite",
         ),
-        (
-            &[rifter(vec![Entry {
-                location: Some(Location::Cargo),
-                ..entry(AVATAR_UNPUBLISHED)
-            }])],
-            "not what its name resolves to",
-        ),
         (&[named("Two\nlines")], "CR or LF"),
     ];
     for (fits, message) in invalid {
@@ -596,8 +589,29 @@ fn shared_name_published_wins() {
 }
 
 #[test]
+fn shared_name_by_type_id() {
+    let fits = [rifter(vec![entry(AVATAR_UNPUBLISHED)])];
+    let text = save(&fits).unwrap();
+    assert_eq!(text, "%esf/1\nRifter\n\n#50097\n");
+    assert_eq!(load(&text).unwrap(), fits);
+    assert_eq!(
+        load(esf::save_binary(&fits, &*CATALOG).unwrap()).unwrap(),
+        fits
+    );
+}
+
+#[test]
+fn load_type_id() {
+    let fit = rifter(vec![Entry {
+        charge: Some(EMP),
+        ..entry(AUTOCANNON)
+    }]);
+    assert_eq!(load("%esf/1\n#587\n#2889 :#21898\n").unwrap(), [fit]);
+}
+
+#[test]
 fn load_invalid() {
-    let invalid: [(&[u8], &str); 4] = [
+    let invalid: [(&[u8], &str); 6] = [
         (b"", "the document is empty"),
         (
             b"%esf/1\nRifter\xED\xA0\x80\n",
@@ -608,6 +622,8 @@ fn load_invalid() {
             b"%esf/1\nRifter\n4294967295x Damage Control II\n4294967295x Damage Control II\n",
             "too large",
         ),
+        (b"%esf/1\nRifter\n#4294967296\n", "type ID is too large"),
+        (b"%esf/1\nRifter\n#999999999\n", "unknown type ID"),
     ];
     for (data, message) in invalid {
         assert_error(load(data), message);

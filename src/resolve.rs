@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::names::{fold, is_word_prefix};
-use crate::text::{EmptyLine, FitBlock, ItemLine, Line};
+use crate::text::{EmptyLine, FitBlock, ItemLine, Line, TypeRef};
 use crate::{
     AttributeRecord, Catalog, Error, Kind, Location, MutaplasmidRecord, State, TypeRecord,
 };
@@ -123,12 +123,17 @@ pub(crate) fn mode_name<'a>(hull: &TypeRecord, mode: &'a TypeRecord) -> &'a str 
 
 fn type_named<'a>(
     catalog: &'a dyn Catalog,
-    name: &str,
+    name: &TypeRef<'_>,
     line: usize,
 ) -> Result<&'a TypeRecord, Error> {
-    catalog
-        .type_by_name(&fold(name))
-        .ok_or_else(|| Error::catalog(format!("unknown type {name:?}")).at(line))
+    match name {
+        TypeRef::Name(name) => catalog
+            .type_by_name(&fold(name))
+            .ok_or_else(|| Error::catalog(format!("unknown type {name:?}")).at(line)),
+        TypeRef::Id(id) => catalog
+            .type_by_id(*id)
+            .ok_or_else(|| Error::catalog(format!("unknown type ID #{id}")).at(line)),
+    }
 }
 
 fn pick<'a, T>(
