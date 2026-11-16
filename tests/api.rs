@@ -20,6 +20,9 @@ const DECAYED_DAMAGE_CONTROL_MUTAPLASMID: u32 = 52224;
 const AVATAR: u32 = 11567;
 const AVATAR_UNPUBLISHED: u32 = 50097;
 const SMALL_SECURE_CONTAINER: u32 = 3467;
+const THANATOS: u32 = 23911;
+const TEMPLAR: u32 = 40556;
+const FIRBOLG: u32 = 40558;
 
 fn entry(type_id: u32) -> Entry {
     Entry {
@@ -215,6 +218,56 @@ fn save_slots() {
 }
 
 #[test]
+fn save_tubes() {
+    let empty = |slot| Entry {
+        location: Some(Location::Tube),
+        slot,
+        ..Entry::default()
+    };
+    let fit = |entries| EsfFit {
+        hull: Some(THANATOS),
+        entries,
+        ..EsfFit::default()
+    };
+    let pinned = [fit(vec![
+        entry(TEMPLAR),
+        Entry {
+            count: Some(3),
+            location: Some(Location::Tube),
+            slot: Some(4),
+            ..entry(FIRBOLG)
+        },
+        empty(Some(2)),
+        empty(None),
+        empty(None),
+    ])];
+    let text = save(&pinned).unwrap();
+    assert_eq!(
+        text,
+        "%esf/1\n\
+         Thanatos\n\
+         \n\
+         Templar II\n\
+         2x - @tube\n\
+         3x Firbolg II\n"
+    );
+    let want = fit(vec![
+        entry(TEMPLAR),
+        Entry {
+            count: Some(2),
+            ..empty(None)
+        },
+        Entry {
+            count: Some(3),
+            ..entry(FIRBOLG)
+        },
+    ]);
+    assert_eq!(load(&text).unwrap(), [want]);
+    let binary = esf::save_binary(&pinned, &*CATALOG).unwrap();
+    assert_eq!(load(binary).unwrap(), load(text).unwrap());
+}
+
+#[test]
 fn save_binary_slots() {
     let fits = [rifter(vec![
         entry(AUTOCANNON),
@@ -243,7 +296,7 @@ fn save_slot_without_a_hull() {
 
 #[test]
 fn save_invalid() {
-    let invalid: [(&[EsfFit], &str); 22] = [
+    let invalid: [(&[EsfFit], &str); 24] = [
         (&[], "at least one fit"),
         (
             &[rifter(vec![Entry::default()])],
@@ -338,6 +391,21 @@ fn save_invalid() {
                 ..entry(AUTOCANNON)
             }])],
             "does not go in the low rack",
+        ),
+        (
+            &[rifter(vec![Entry {
+                location: Some(Location::Tube),
+                slot: Some(1),
+                ..entry(HOBGOBLIN)
+            }])],
+            "does not go in the tube rack",
+        ),
+        (
+            &[rifter(vec![Entry {
+                location: Some(Location::Tube),
+                ..entry(TEMPLAR)
+            }])],
+            "only to pin a slot",
         ),
         (
             &[rifter(vec![Entry {
@@ -604,8 +672,8 @@ fn binary_invalid() {
         ),
         (document_with_entry(b"\x48\x04"), "unknown State value 4"),
         (
-            document_with_entry(b"\x50\x1C"),
-            "unknown Location value 28",
+            document_with_entry(b"\x50\x1D"),
+            "unknown Location value 29",
         ),
         (document_with_entry(b"\x38\x32"), "different lengths"),
         (document_with_entry(b"\x3A\x01\x80"), "cut short"),

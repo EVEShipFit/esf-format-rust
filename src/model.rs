@@ -78,11 +78,12 @@ pub struct Entry {
     /// Where the item goes. `None` means where its type goes by default; see [`Location`].
     pub location: Option<Location>,
     /// The slot in the [`location`](Entry::location) rack, counting from 1, like 3 for the
-    /// third high slot.
+    /// third high slot or the third launch tube.
     ///
     /// Set [`location`](Entry::location) to the rack too, and the item must go in that rack.
-    /// A pinned entry is one item, so leave [`count`](Entry::count) as `None`. Two entries
-    /// cannot pin the same slot. `None` means the next free slot.
+    /// A pinned entry is one item, so leave [`count`](Entry::count) as `None`. A fighter
+    /// squadron in a tube is the exception: there, the count is the squadron's size. Two
+    /// entries cannot pin the same slot. `None` means the next free slot.
     /// [`load`](crate::load) never sets this: it gives the rack in slot order, with empty
     /// slots in between.
     pub slot: Option<u32>,
@@ -132,12 +133,13 @@ impl fmt::Display for State {
 /// So a drone with no location is out in space, and a fighter is in a launch tube. Set
 /// [`Bay`](Location::Bay) to keep either one in its bay.
 ///
-/// The racks, [`High`](Location::High) to [`Svc`](Location::Svc), are for empty slots, and
-/// for an item put in a given [`Entry::slot`]. Otherwise, an item never names its rack. The
-/// holds, [`Ammo`](Location::Ammo) to
-/// [`Subsystem`](Location::Subsystem), only make sense on a hull that has that hold, but the
-/// library does not check that.
+/// The racks, [`High`](Location::High) to [`Svc`](Location::Svc) and the launch tubes in
+/// [`Tube`](Location::Tube), are for empty slots, and for an item put in a given
+/// [`Entry::slot`]. Otherwise, an item never names its rack. The holds,
+/// [`Ammo`](Location::Ammo) to [`Subsystem`](Location::Subsystem), only make sense on a hull
+/// that has that hold, but the library does not check that.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[non_exhaustive]
 pub enum Location {
     /// The high slot rack.
     High = 1,
@@ -196,11 +198,13 @@ pub enum Location {
     /// The Subsystem Hold, for spare subsystems. Not the same as [`Sub`](Location::Sub), which
     /// is the rack.
     Subsystem,
+    /// The fighter launch tubes, a rack for fighters only.
+    Tube,
 }
 
 impl Location {
     /// In binary order: the number of each is its index plus one.
-    pub(crate) const ALL: [Location; 27] = [
+    pub(crate) const ALL: [Location; 28] = [
         Location::High,
         Location::Mid,
         Location::Low,
@@ -228,16 +232,18 @@ impl Location {
         Location::Planetary,
         Location::Quafe,
         Location::Subsystem,
+        Location::Tube,
     ];
 
     /// The racks, in canonical order (§8).
-    pub(crate) const RACKS: [Location; 6] = [
+    pub(crate) const RACKS: [Location; 7] = [
         Location::Sub,
         Location::High,
         Location::Mid,
         Location::Low,
         Location::Rig,
         Location::Svc,
+        Location::Tube,
     ];
 
     /// The name as written after `@`.
@@ -270,6 +276,7 @@ impl Location {
             Location::Planetary => "planetary",
             Location::Quafe => "quafe",
             Location::Subsystem => "subsystem",
+            Location::Tube => "tube",
         }
     }
 
@@ -279,7 +286,7 @@ impl Location {
 
     /// Whether this is a rack of slots.
     pub fn is_rack(self) -> bool {
-        self <= Location::Svc
+        self <= Location::Svc || self == Location::Tube
     }
 
     /// Whether this is the cargo, the bay or another hold.

@@ -3,7 +3,7 @@
 use crate::catalog::{attribute_of, full_load};
 use crate::names::{fold, shortest_unique};
 use crate::number;
-use crate::resolve::{Fit, Item, Place, Slot, default_place, kind_place, mode_name};
+use crate::resolve::{Fit, Item, Place, Run, Slot, default_place, kind_place, mode_name};
 use crate::text::{SIGILS, is_count};
 use crate::{
     AttributeRecord, Catalog, Entry, Error, EsfFit, Location, MutaplasmidRecord, State, TypeRecord,
@@ -289,13 +289,18 @@ impl<'a> Context<'_, 'a> {
         })
     }
 
-    fn rack(&self, rack: Location) -> Result<Vec<CanonLine<'a>>, Error> {
+    fn runs(&self, rack: Location) -> &[Run] {
         let mut runs = self.fit.rack(rack);
         while let [rest @ .., last] = runs
             && last.item.is_none()
         {
             runs = rest;
         }
+        runs
+    }
+
+    fn rack(&self, rack: Location) -> Result<Vec<CanonLine<'a>>, Error> {
+        let runs = self.runs(rack);
         let mut lines = Vec::with_capacity(runs.len());
         for run in runs {
             let mut line = match run.item.map(|at| &self.fit.slots[at]) {
@@ -333,14 +338,26 @@ impl<'a> Context<'_, 'a> {
 
     fn fighters(&self, items: &[&Item<'a>]) -> Result<Vec<CanonLine<'a>>, Error> {
         let mut lines = Vec::new();
-        for item in only(items, Place::Fighters) {
-            let mut line = self.line(item)?;
-            let count = item
-                .line
-                .count
-                .filter(|&count| Some(count) != item.r#type.squadron_size);
-            line.count = count.map(u64::from);
-            lines.push(line);
+        let runs = self.runs(Location::Tube);
+        for chunk in runs.chunk_by(|a, b| a.item.is_none() && b.item.is_none()) {
+            if let [run] = chunk
+                && let Some(Slot::Item(item)) = run.item.map(|at| &self.fit.slots[at])
+            {
+                let mut line = self.line(item)?;
+                let count = item
+                    .line
+                    .count
+                    .filter(|&count| Some(count) != item.r#type.squadron_size);
+                line.count = count.map(u64::from);
+                lines.push(line);
+                continue;
+            }
+            let empty = chunk.iter().map(|run| {
+                let mut line = CanonLine::empty(Location::Tube);
+                line.count = Some(run.length);
+                (true, line)
+            });
+            lines.extend(collapse(empty.collect())?);
         }
         lines.extend(self.sorted(&only(items, Place::At(Location::Bay)))?);
         Ok(lines)
@@ -361,7 +378,7 @@ const GROUPS: [Place; 30] = [
     Place::At(Location::Rig),
     Place::At(Location::Svc),
     Place::Drones,
-    Place::Fighters,
+    Place::At(Location::Tube),
     Place::At(Location::Cargo),
     Place::At(Location::Ammo),
     Place::At(Location::Booster),
@@ -414,9 +431,9 @@ pub(crate) fn canonical_fit<'a>(
     let mut groups = Vec::new();
     for (group, items) in GROUPS.into_iter().zip(&grouped) {
         let lines = match group {
+            Place::At(Location::Tube) => context.fighters(items)?,
             Place::At(rack) if rack.is_rack() => context.rack(rack)?,
             Place::Drones => context.drones(items)?,
-            Place::Fighters => context.fighters(items)?,
             _ => context.sorted(items)?,
         };
         if !lines.is_empty() {
