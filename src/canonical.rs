@@ -177,8 +177,10 @@ fn collapse(lines: Vec<(bool, CanonLine<'_>)>) -> Result<Vec<CanonLine<'_>>, Err
     }
     Ok(out
         .into_iter()
-        .map(|(_, mut line)| {
-            line.count = line.count.filter(|&count| count != 1);
+        .map(|(repeatable, mut line)| {
+            if repeatable {
+                line.count = line.count.filter(|&count| count != 1);
+            }
             line
         })
         .collect())
@@ -298,14 +300,33 @@ impl<'a> Context<'_, 'a> {
         }
         let mut lines = Vec::with_capacity(runs.len());
         for run in runs {
-            let mut line = match run.item.map(|at| &self.fit.slots[at]) {
-                Some(Slot::Item(item)) => self.line(item)?,
-                _ => CanonLine::empty(rack),
-            };
-            line.count = Some(run.length);
-            lines.push((true, line));
+            match run.item.map(|at| &self.fit.slots[at]) {
+                Some(Slot::Item(item)) if rack == Location::Tube => {
+                    lines.push((false, self.squadron(item)?));
+                }
+                Some(Slot::Item(item)) => {
+                    let mut line = self.line(item)?;
+                    line.count = Some(run.length);
+                    lines.push((true, line));
+                }
+                _ => {
+                    let mut line = CanonLine::empty(rack);
+                    line.count = Some(run.length);
+                    lines.push((true, line));
+                }
+            }
         }
         collapse(lines)
+    }
+
+    fn squadron(&self, item: &Item<'a>) -> Result<CanonLine<'a>, Error> {
+        let mut line = self.line(item)?;
+        let count = item
+            .line
+            .count
+            .filter(|&count| Some(count) != item.r#type.squadron_size);
+        line.count = count.map(u64::from);
+        Ok(line)
     }
 
     fn sorted(&self, items: &[&Item<'a>]) -> Result<Vec<CanonLine<'a>>, Error> {
@@ -332,16 +353,7 @@ impl<'a> Context<'_, 'a> {
     }
 
     fn fighters(&self, items: &[&Item<'a>]) -> Result<Vec<CanonLine<'a>>, Error> {
-        let mut lines = Vec::new();
-        for item in only(items, Place::Fighters) {
-            let mut line = self.line(item)?;
-            let count = item
-                .line
-                .count
-                .filter(|&count| Some(count) != item.r#type.squadron_size);
-            line.count = count.map(u64::from);
-            lines.push(line);
-        }
+        let mut lines = self.rack(Location::Tube)?;
         lines.extend(self.sorted(&only(items, Place::At(Location::Bay)))?);
         Ok(lines)
     }
@@ -361,7 +373,7 @@ const GROUPS: [Place; 30] = [
     Place::At(Location::Rig),
     Place::At(Location::Svc),
     Place::Drones,
-    Place::Fighters,
+    Place::At(Location::Tube),
     Place::At(Location::Cargo),
     Place::At(Location::Ammo),
     Place::At(Location::Booster),
@@ -414,9 +426,9 @@ pub(crate) fn canonical_fit<'a>(
     let mut groups = Vec::new();
     for (group, items) in GROUPS.into_iter().zip(&grouped) {
         let lines = match group {
+            Place::At(Location::Tube) => context.fighters(items)?,
             Place::At(rack) if rack.is_rack() => context.rack(rack)?,
             Place::Drones => context.drones(items)?,
-            Place::Fighters => context.fighters(items)?,
             _ => context.sorted(items)?,
         };
         if !lines.is_empty() {

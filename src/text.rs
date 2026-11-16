@@ -400,7 +400,7 @@ fn entry<'a>(cur: &mut Cursor<'a>) -> Parsed<Line<'a>> {
                     return cur
                         .error("an item names a rack only to pin a slot, which needs an index");
                 }
-                if index.is_some() && count.is_some() {
+                if index.is_some() && count.is_some() && location != Location::Tube {
                     return cur.error("a count and a pinned slot are mutually exclusive");
                 }
                 line.location = Some(location);

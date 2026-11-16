@@ -13,7 +13,6 @@ use crate::{
 pub(crate) enum Place {
     At(Location),
     Drones,
-    Fighters,
     Implants,
     Boosters,
 }
@@ -42,7 +41,7 @@ pub(crate) fn kind_place(kind: Kind) -> Option<Place> {
         Kind::Rig => Place::At(Location::Rig),
         Kind::Svc => Place::At(Location::Svc),
         Kind::Drone => Place::Drones,
-        Kind::Fighter => Place::Fighters,
+        Kind::Fighter => Place::At(Location::Tube),
         Kind::Implant => Place::Implants,
         Kind::Booster => Place::Boosters,
         _ => return None,
@@ -375,6 +374,9 @@ fn check_cycles(fits: &[Fit<'_>]) -> Result<(), Error> {
 fn line_of<'a>(slot: &'a Slot<'a>) -> (usize, Option<u32>, Option<u32>) {
     match slot {
         Slot::Empty(line) => (line.number, line.count, line.index),
+        Slot::Item(item) if item.place == Place::At(Location::Tube) => {
+            (item.line.number, None, item.line.index)
+        }
         Slot::Item(item) => (item.line.number, item.line.count, item.line.index),
     }
 }
