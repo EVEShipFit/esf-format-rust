@@ -129,6 +129,8 @@ impl fmt::Display for State {
 /// An item goes where its [`Kind`](crate::Kind) says, so most entries leave this `None`. Set
 /// it to store an item somewhere else, like a spare Damage Control II in
 /// [`Cargo`](Location::Cargo).
+/// So a drone with no location is out in space, and a fighter is in a launch tube. Set
+/// [`Bay`](Location::Bay) to keep either one in its bay.
 ///
 /// The racks, [`High`](Location::High) to [`Svc`](Location::Svc), are for empty slots, and
 /// for an item put in a given [`Entry::slot`]. Otherwise, an item never names its rack. The
