@@ -10,7 +10,7 @@ const EGROUP: u8 = 4;
 const I32: u8 = 5;
 
 fn invalid(why: &str) -> Error {
-    Error::new(format!("binary: not valid Protocol Buffers ({why})"))
+    Error::format(format!("binary: not valid Protocol Buffers ({why})"))
 }
 
 pub(crate) fn varint(out: &mut Vec<u8>, mut value: u64) {

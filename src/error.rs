@@ -1,9 +1,13 @@
 use std::fmt;
 
-/// A broken rule of esf/1, and where: a line of text, or a fit and entry, counting from 1.
+/// An esf/1 error, and where: a line of text, or a fit and entry, counting from 1.
+///
+/// Every error is one of three [`ErrorKind`]s. Check `kind` to handle one kind.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Error {
+    /// What kind of error this is.
+    pub kind: ErrorKind,
     /// What is wrong.
     pub message: String,
     /// The line of the text.
@@ -14,9 +18,30 @@ pub struct Error {
     pub entry: Option<usize>,
 }
 
+/// What kind of error an [`Error`] is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ErrorKind {
+    /// The data is not a well-formed esf/1 document.
+    ///
+    /// The text does not follow the grammar, the binary form or base64url is broken, or a fit
+    /// name cannot be written.
+    Format,
+    /// The catalog does not know a name or ID, or a name matches more than one type.
+    ///
+    /// This often means the catalog is older than the fit.
+    Catalog,
+    /// The fit breaks a rule of esf/1.
+    ///
+    /// The document is well formed and the catalog knows every type, but the fit is not valid.
+    /// For example, a module is in the wrong rack.
+    Rule,
+}
+
 impl Error {
-    pub(crate) fn new(message: impl Into<String>) -> Error {
+    fn new(kind: ErrorKind, message: impl Into<String>) -> Error {
         Error {
+            kind,
             message: message.into(),
             line: None,
             fit: None,
@@ -24,10 +49,22 @@ impl Error {
         }
     }
 
-    pub(crate) fn at(line: usize, message: impl Into<String>) -> Error {
+    pub(crate) fn format(message: impl Into<String>) -> Error {
+        Error::new(ErrorKind::Format, message)
+    }
+
+    pub(crate) fn catalog(message: impl Into<String>) -> Error {
+        Error::new(ErrorKind::Catalog, message)
+    }
+
+    pub(crate) fn rule(message: impl Into<String>) -> Error {
+        Error::new(ErrorKind::Rule, message)
+    }
+
+    pub(crate) fn at(self, line: usize) -> Error {
         Error {
             line: Some(line),
-            ..Error::new(message)
+            ..self
         }
     }
 

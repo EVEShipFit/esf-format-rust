@@ -166,7 +166,7 @@ fn collapse(lines: Vec<(bool, CanonLine<'_>)>) -> Result<Vec<CanonLine<'_>>, Err
         {
             let count = prev.count.unwrap_or(1) + line.count.unwrap_or(1);
             if count > u64::from(u32::MAX) {
-                return Err(Error::new(format!(
+                return Err(Error::rule(format!(
                     "lines collapse into a count of {count}, which is too large"
                 )));
             }
