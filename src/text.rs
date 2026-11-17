@@ -57,7 +57,7 @@ type Parsed<T> = Result<T, Error>;
 
 impl<'a> Cursor<'a> {
     fn error<T>(&self, message: impl Into<String>) -> Parsed<T> {
-        Err(Error::at(self.number, message))
+        Err(Error::format(message).at(self.number))
     }
 
     fn peek(&self) -> Option<u8> {
@@ -433,7 +433,7 @@ fn header(text: &str) -> Option<(&str, &str)> {
 /// Split a text document into fits; other blocks are skipped.
 pub(crate) fn parse(data: &[u8]) -> Parsed<Vec<FitBlock<'_>>> {
     let text = std::str::from_utf8(data)
-        .map_err(|e| Error::new(format!("not valid UTF-8 at byte {}", e.valid_up_to())))?;
+        .map_err(|e| Error::format(format!("not valid UTF-8 at byte {}", e.valid_up_to())))?;
     let text = text.strip_suffix('\n').unwrap_or(text);
 
     let mut fits: Vec<FitBlock<'_>> = Vec::new();
@@ -443,24 +443,23 @@ pub(crate) fn parse(data: &[u8]) -> Parsed<Vec<FitBlock<'_>>> {
     for (raw, number) in text.split('\n').zip(1..) {
         let raw = raw.strip_suffix('\r').unwrap_or(raw);
         if raw.contains('\r') {
-            return Err(Error::at(number, "a CR must be followed by an LF"));
+            return Err(Error::format("a CR must be followed by an LF").at(number));
         }
 
         if raw.trim_start_matches(' ').starts_with('%') {
             let Some((name, version)) = header(raw) else {
-                return Err(Error::at(number, "malformed header"));
+                return Err(Error::format("malformed header").at(number));
             };
             if let Some(line) = header_line {
-                return Err(Error::at(line, "a fit needs a hull line"));
+                return Err(Error::format("a fit needs a hull line").at(line));
             }
             in_block = true;
             in_fit = false;
             if name == "esf" {
                 if version != "1" {
-                    return Err(Error::at(
-                        number,
-                        format!("unsupported version esf/{version}"),
-                    ));
+                    return Err(
+                        Error::format(format!("unsupported version esf/{version}")).at(number)
+                    );
                 }
                 header_line = Some(number);
             }
@@ -468,7 +467,7 @@ pub(crate) fn parse(data: &[u8]) -> Parsed<Vec<FitBlock<'_>>> {
         }
 
         if !in_block {
-            return Err(Error::at(number, "a document starts with a header"));
+            return Err(Error::format("a document starts with a header").at(number));
         }
         if is_blank(raw) {
             continue;
@@ -489,10 +488,10 @@ pub(crate) fn parse(data: &[u8]) -> Parsed<Vec<FitBlock<'_>>> {
     }
 
     if let Some(line) = header_line {
-        return Err(Error::at(line, "a fit needs a hull line"));
+        return Err(Error::format("a fit needs a hull line").at(line));
     }
     if fits.is_empty() {
-        return Err(Error::new("a document holds at least one fit"));
+        return Err(Error::format("a document holds at least one fit"));
     }
     Ok(fits)
 }

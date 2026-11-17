@@ -55,14 +55,14 @@ pub(crate) fn encode(fits: &[EsfFit]) -> Vec<u8> {
 }
 
 fn uint32(value: u64, what: &str) -> Result<u32, Error> {
-    u32::try_from(value).map_err(|_| Error::new(format!("binary: {what} is out of range")))
+    u32::try_from(value).map_err(|_| Error::format(format!("binary: {what} is out of range")))
 }
 
 fn string(payload: &[u8], what: &str) -> Result<Option<String>, Error> {
     match std::str::from_utf8(payload) {
         Ok("") => Ok(None),
         Ok(text) => Ok(Some(text.to_string())),
-        Err(_) => Err(Error::new(format!("binary: {what} is not valid UTF-8"))),
+        Err(_) => Err(Error::format(format!("binary: {what} is not valid UTF-8"))),
     }
 }
 
@@ -73,7 +73,7 @@ fn state(value: u64) -> Result<Option<State>, Error> {
             .into_iter()
             .find(|&s| s as u64 == value)
             .map(Some)
-            .ok_or_else(|| Error::new(format!("binary: unknown State value {value}"))),
+            .ok_or_else(|| Error::format(format!("binary: unknown State value {value}"))),
     }
 }
 
@@ -84,12 +84,12 @@ fn location(value: u64) -> Result<Option<Location>, Error> {
             .into_iter()
             .find(|&l| l as u64 == value)
             .map(Some)
-            .ok_or_else(|| Error::new(format!("binary: unknown Location value {value}"))),
+            .ok_or_else(|| Error::format(format!("binary: unknown Location value {value}"))),
     }
 }
 
 fn not_in_schema(what: &str) -> Error {
-    Error::new(format!(
+    Error::format(format!(
         "binary: {what} has a field that is not in the schema"
     ))
 }
@@ -121,11 +121,13 @@ fn decode_entry(data: &[u8]) -> Result<Entry, Error> {
         }
     }
     if attributes.len() != values.len() {
-        return Err(Error::new("binary: override fields have different lengths"));
+        return Err(Error::format(
+            "binary: override fields have different lengths",
+        ));
     }
     let mut seen = HashSet::with_capacity(attributes.len());
     if !attributes.iter().all(|&id| seen.insert(id)) {
-        return Err(Error::new("binary: an attribute is overridden twice"));
+        return Err(Error::rule("binary: an attribute is overridden twice"));
     }
     e.overrides = attributes.into_iter().zip(values).collect();
     Ok(e)
@@ -146,7 +148,7 @@ fn decode_fit(data: &[u8]) -> Result<EsfFit, Error> {
         }
     }
     if version != 1 {
-        return Err(Error::new(format!(
+        return Err(Error::format(format!(
             "binary: unsupported Fit.version {version}"
         )));
     }
@@ -159,12 +161,16 @@ pub(crate) fn decode(data: &[u8]) -> Result<Vec<EsfFit>, Error> {
     while !reader.done() {
         match reader.field()? {
             (1, Value::Len(b)) => fits.push(decode_fit(b)?),
-            (1, _) => return Err(Error::new("binary: Document.fits has the wrong wire type")),
+            (1, _) => {
+                return Err(Error::format(
+                    "binary: Document.fits has the wrong wire type",
+                ));
+            }
             _ => {}
         }
     }
     if fits.is_empty() {
-        return Err(Error::new("binary: a document holds at least one fit"));
+        return Err(Error::format("binary: a document holds at least one fit"));
     }
     Ok(fits)
 }

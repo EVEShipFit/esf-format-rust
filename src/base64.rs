@@ -28,7 +28,7 @@ fn sextet(c: u8) -> Option<u32> {
 /// The binary form from base64url without padding (§10.4).
 pub fn from_base64url(encoded: &str) -> Result<Vec<u8>, Error> {
     let encoded = encoded.trim().as_bytes();
-    let invalid = || Error::new("not valid base64url");
+    let invalid = || Error::format("not valid base64url");
     if encoded.len() % 4 == 1 {
         return Err(invalid());
     }

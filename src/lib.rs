@@ -18,7 +18,7 @@ mod wire;
 
 pub use base64::{from_base64url, to_base64url};
 pub use catalog::{AttributeRecord, Catalog, Kind, MutaplasmidRecord, TypeRecord};
-pub use error::Error;
+pub use error::{Error, ErrorKind};
 pub use model::{Entry, EsfFit, Location, State};
 pub use names::fold;
 
@@ -71,7 +71,7 @@ fn to_model(fits: &[CanonFit<'_>]) -> Vec<EsfFit> {
 pub fn load(data: impl AsRef<[u8]>, catalog: &dyn Catalog) -> Result<Vec<EsfFit>, Error> {
     let data = data.as_ref();
     if data.is_empty() {
-        return Err(Error::new("the document is empty"));
+        return Err(Error::format("the document is empty"));
     }
     if is_text(data) {
         let blocks = text::parse(data)?;

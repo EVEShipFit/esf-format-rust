@@ -198,7 +198,7 @@ pub(crate) fn attribute_of(
 ) -> Result<&AttributeRecord, Error> {
     catalog
         .attribute_by_id(attribute_id)
-        .ok_or_else(|| Error::new(format!("the catalog has no attribute {attribute_id}")))
+        .ok_or_else(|| Error::catalog(format!("the catalog has no attribute {attribute_id}")))
 }
 
 /// How many charges fit in an item, by the shortest decimals of both volumes (§6.5).

@@ -4,7 +4,8 @@ use std::sync::LazyLock;
 
 use catalog::JsonCatalog;
 use esf::{
-    AttributeRecord, Catalog, Entry, EsfFit, Kind, Location, MutaplasmidRecord, State, TypeRecord,
+    AttributeRecord, Catalog, Entry, ErrorKind, EsfFit, Kind, Location, MutaplasmidRecord, State,
+    TypeRecord,
 };
 
 static CATALOG: LazyLock<JsonCatalog> = LazyLock::new(|| JsonCatalog::new(&catalog::path()));
@@ -495,6 +496,7 @@ fn error_location() {
         rifter(vec![entry(AUTOCANNON), entry(999_999_999)]),
     ])
     .unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Catalog);
     assert_eq!(
         (error.fit, error.entry, error.line),
         (Some(2), Some(2), None)
@@ -512,6 +514,7 @@ fn error_location_of_a_fit() {
         },
     ])
     .unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Catalog);
     assert_eq!((error.fit, error.entry, error.line), (Some(2), None, None));
     assert!(error.to_string().starts_with("fit 2: "));
 }
@@ -524,6 +527,7 @@ fn error_location_of_a_resolved_line() {
         ..entry(EMP)
     };
     let error = save(&[rifter(vec![entry(AUTOCANNON), stored])]).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Rule);
     assert_eq!((error.fit, error.entry), (Some(1), Some(2)));
     let error = save(&[EsfFit {
         mode: Some(AUTOCANNON),
@@ -536,8 +540,32 @@ fn error_location_of_a_resolved_line() {
 #[test]
 fn error_location_of_text() {
     let error = load("%esf/1\nRifter\nNo Such Module\n").unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Catalog);
     assert_eq!((error.fit, error.entry, error.line), (None, None, Some(3)));
     assert_eq!(error.to_string(), "line 3: unknown type \"No Such Module\"");
+}
+
+#[test]
+fn error_kinds() {
+    fn kind<T: std::fmt::Debug>(result: Result<T, esf::Error>) -> ErrorKind {
+        result.unwrap_err().kind
+    }
+    assert_eq!(kind(load("%esf/1\n2x Rifter\n")), ErrorKind::Format);
+    assert_eq!(kind(load(b"\x0A")), ErrorKind::Format);
+    assert_eq!(
+        kind(load("%esf/1\nRifter\nDamage Control II {nope 1}\n")),
+        ErrorKind::Catalog
+    );
+    assert_eq!(
+        kind(load("%esf/1\nRifter\nDamage Control II @bay\n")),
+        ErrorKind::Rule
+    );
+    let count = Entry {
+        count: Some(0),
+        ..entry(AUTOCANNON)
+    };
+    assert_eq!(kind(save(&[rifter(vec![count])])), ErrorKind::Rule);
+    assert_eq!(kind(save(&[named("a\nb")])), ErrorKind::Format);
 }
 
 #[test]
@@ -812,7 +840,9 @@ fn base64url() {
     assert!(!url.contains('='));
     assert_eq!(esf::from_base64url(&url).unwrap(), data);
     for invalid in ["not base64url!", "AA==", "AAAAA"] {
-        assert_error(esf::from_base64url(invalid), "not valid base64url");
+        let error = esf::from_base64url(invalid).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Format);
+        assert_eq!(error.message, "not valid base64url");
     }
 }
 

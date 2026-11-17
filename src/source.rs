@@ -10,36 +10,36 @@ pub(crate) type Where = Vec<(usize, Option<usize>)>;
 
 fn name(text: &str) -> Result<String, Error> {
     if text.contains(['\r', '\n']) {
-        return Err(Error::new("a fit name contains CR or LF"));
+        return Err(Error::format("a fit name contains CR or LF"));
     }
     Ok(quote(text))
 }
 
 fn type_name(catalog: &dyn Catalog, type_id: u32, what: &str) -> Result<String, Error> {
     match catalog.type_by_id(type_id) {
-        Some(t) if t.name.contains(['\r', '\n']) => Err(Error::new(format!(
+        Some(t) if t.name.contains(['\r', '\n']) => Err(Error::format(format!(
             "the name of {what} type ID {type_id} contains CR or LF"
         ))),
         Some(t) => Ok(quote_type(&t.name)),
-        None => Err(Error::new(format!("unknown {what} type ID {type_id}"))),
+        None => Err(Error::catalog(format!("unknown {what} type ID {type_id}"))),
     }
 }
 
 fn entry(e: &Entry, catalog: &dyn Catalog) -> Result<String, Error> {
     if e.count == Some(0) || e.charge_count == Some(0) {
-        return Err(Error::new("a count must be at least 1"));
+        return Err(Error::rule("a count must be at least 1"));
     }
     if e.slot == Some(0) {
-        return Err(Error::new("a slot must be at least 1"));
+        return Err(Error::rule("a slot must be at least 1"));
     }
     if e.slot.is_some() && !e.location.is_some_and(Location::is_rack) {
-        return Err(Error::new("a slot needs the rack it is in"));
+        return Err(Error::rule("a slot needs the rack it is in"));
     }
     if e.type_id.is_some() && e.slot.is_none() && e.location.is_some_and(Location::is_rack) {
-        return Err(Error::new("an item names a rack only to pin a slot"));
+        return Err(Error::rule("an item names a rack only to pin a slot"));
     }
     if e.charge_count.is_some() && e.charge.is_none() {
-        return Err(Error::new("a charge count is set without a charge"));
+        return Err(Error::rule("a charge count is set without a charge"));
     }
 
     let mut parts = Vec::new();
@@ -69,10 +69,12 @@ fn entry(e: &Entry, catalog: &dyn Catalog) -> Result<String, Error> {
         let mut pairs = Vec::with_capacity(e.overrides.len());
         for &(attribute_id, value) in &e.overrides {
             let Some(attribute) = catalog.attribute_by_id(attribute_id) else {
-                return Err(Error::new(format!("unknown attribute ID {attribute_id}")));
+                return Err(Error::catalog(format!(
+                    "unknown attribute ID {attribute_id}"
+                )));
             };
             if !value.is_finite() {
-                return Err(Error::new("an override value is not finite"));
+                return Err(Error::rule("an override value is not finite"));
             }
             pairs.push(format!("{} {}", attribute.name, number::format(value)));
         }
@@ -105,7 +107,7 @@ fn hull(fit: &EsfFit, catalog: &dyn Catalog) -> Result<String, Error> {
 /// The text document the fits stand for, and where each line came from.
 pub(crate) fn source(fits: &[EsfFit], catalog: &dyn Catalog) -> Result<(String, Where), Error> {
     if fits.is_empty() {
-        return Err(Error::new("a document holds at least one fit"));
+        return Err(Error::format("a document holds at least one fit"));
     }
     let mut out = String::new();
     let mut lines = Where::new();
@@ -128,7 +130,7 @@ fn same(got: Option<u32>, want: Option<u32>, what: &str) -> Result<(), Error> {
     if got == want {
         return Ok(());
     }
-    Err(Error::new(format!(
+    Err(Error::rule(format!(
         "{what} ID {} is not what its name resolves to ({})",
         show(want),
         show(got)
@@ -157,7 +159,7 @@ pub(crate) fn verify(resolved: &[Fit<'_>], fits: &[EsfFit]) -> Result<(), Error>
                 let got: Vec<u32> = item.overrides.iter().map(|(a, _)| a.id).collect();
                 let want: Vec<u32> = entry.overrides.iter().map(|&(id, _)| id).collect();
                 if got != want {
-                    return Err(Error::new(format!(
+                    return Err(Error::rule(format!(
                         "attribute IDs {want:?} resolve to {got:?}"
                     )));
                 }

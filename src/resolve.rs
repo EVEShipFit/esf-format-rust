@@ -128,7 +128,7 @@ fn type_named<'a>(
 ) -> Result<&'a TypeRecord, Error> {
     catalog
         .type_by_name(&fold(name))
-        .ok_or_else(|| Error::at(line, format!("unknown type {name:?}")))
+        .ok_or_else(|| Error::catalog(format!("unknown type {name:?}")).at(line))
 }
 
 fn pick<'a, T>(
@@ -139,7 +139,7 @@ fn pick<'a, T>(
     name: impl Fn(&T) -> &str,
 ) -> Result<&'a T, Error> {
     match candidates[..] {
-        [] => Err(Error::at(line, format!("no {what} matches {given:?}"))),
+        [] => Err(Error::catalog(format!("no {what} matches {given:?}")).at(line)),
         [one] => Ok(one),
         _ => {
             let names: Vec<String> = candidates
@@ -147,10 +147,7 @@ fn pick<'a, T>(
                 .map(|c| format!("{:?}", name(c)))
                 .collect();
             let names = names.join(", ");
-            Err(Error::at(
-                line,
-                format!("{given:?} matches more than one {what}: {names}"),
-            ))
+            Err(Error::catalog(format!("{given:?} matches more than one {what}: {names}")).at(line))
         }
     }
 }
@@ -171,10 +168,11 @@ fn resolve_hull<'a>(block: &'a FitBlock<'a>, catalog: &'a dyn Catalog) -> Result
     let line = block.hull_line;
     let hull = type_named(catalog, name, line)?;
     if !hull.kind.can_be_hull() {
-        return Err(Error::at(
-            line,
-            format!("{:?} is not a ship, structure or container", hull.name),
-        ));
+        return Err(Error::rule(format!(
+            "{:?} is not a ship, structure or container",
+            hull.name
+        ))
+        .at(line));
     }
     fit.hull = Some(hull);
     fit.cargo_only = hull.kind == Kind::Container;
@@ -182,10 +180,7 @@ fn resolve_hull<'a>(block: &'a FitBlock<'a>, catalog: &'a dyn Catalog) -> Result
     if let Some(given) = &block.mode {
         let modes = catalog.modes(hull.id);
         if modes.is_empty() {
-            return Err(Error::at(
-                line,
-                format!("{:?} has no tactical modes", hull.name),
-            ));
+            return Err(Error::rule(format!("{:?} has no tactical modes", hull.name)).at(line));
         }
         let matches = modes
             .iter()
@@ -208,10 +203,7 @@ fn resolve_item<'a>(
     let n = line.number;
     let t = type_named(catalog, &line.name, n)?;
     if t.kind == Kind::Mode {
-        return Err(Error::at(
-            n,
-            "a tactical mode is only written on the hull line",
-        ));
+        return Err(Error::rule("a tactical mode is only written on the hull line").at(n));
     }
 
     let mut item = Item {
@@ -226,7 +218,7 @@ fn resolve_item<'a>(
 
     if let Some(fit_name) = &line.fit_name {
         if !t.kind.can_be_hull() {
-            return Err(Error::at(n, format!("{:?} cannot take a fit name", t.name)));
+            return Err(Error::rule(format!("{:?} cannot take a fit name", t.name)).at(n));
         }
         match named.get(&(t.id, fold(fit_name))).map(Vec::as_slice) {
             Some(&[one]) => item.reference = Some(one),
@@ -236,53 +228,43 @@ fn resolve_item<'a>(
                 } else {
                     "more than one fit"
                 };
-                return Err(Error::at(
-                    n,
-                    format!("{what} matches {} {fit_name:?}", t.name),
-                ));
+                return Err(Error::rule(format!("{what} matches {} {fit_name:?}", t.name)).at(n));
             }
         }
     }
 
     if let Some(location) = line.location {
         if fit.cargo_only && location != Location::Cargo {
-            return Err(Error::at(
-                n,
-                "a fit without a ship stores everything in cargo",
-            ));
+            return Err(Error::rule("a fit without a ship stores everything in cargo").at(n));
         }
         if line.index.is_some() && kind_place(t.kind) != Some(Place::At(location)) {
-            return Err(Error::at(
-                n,
-                format!("{:?} does not go in the {location} rack", t.name),
-            ));
+            return Err(
+                Error::rule(format!("{:?} does not go in the {location} rack", t.name)).at(n),
+            );
         }
         if location == Location::Bay && !matches!(t.kind, Kind::Drone | Kind::Fighter) {
-            return Err(Error::at(n, "@bay is only for drones and fighters"));
+            return Err(Error::rule("@bay is only for drones and fighters").at(n));
         }
         item.place = Place::At(location);
     }
 
     if item.place.is_plugged() && line.count.is_some() {
-        return Err(Error::at(
-            n,
-            "a plugged-in implant or booster takes no count",
-        ));
+        return Err(Error::rule("a plugged-in implant or booster takes no count").at(n));
     }
 
     if let Some(state) = line.state {
         if item.place.is_stored() {
-            return Err(Error::at(n, "a stored item has no state"));
+            return Err(Error::rule("a stored item has no state").at(n));
         }
         if item.place.is_plugged() && state != State::Off {
-            return Err(Error::at(n, "an implant or booster takes !off only"));
+            return Err(Error::rule("an implant or booster takes !off only").at(n));
         }
     }
 
     if let Some(charge) = &line.charge {
         let charge = type_named(catalog, charge, n)?;
         if charge.kind != Kind::Charge {
-            return Err(Error::at(n, format!("{:?} is not a charge", charge.name)));
+            return Err(Error::rule(format!("{:?} is not a charge", charge.name)).at(n));
         }
         item.charge = Some(charge);
     }
@@ -300,17 +282,18 @@ fn resolve_item<'a>(
     let mut seen = HashSet::new();
     for &(name, value) in &line.overrides {
         let Some(attribute) = catalog.attribute_by_name(&fold(name)) else {
-            return Err(Error::at(n, format!("unknown attribute {name:?}")));
+            return Err(Error::catalog(format!("unknown attribute {name:?}")).at(n));
         };
         if !seen.insert(attribute.id) {
-            return Err(Error::at(
-                n,
-                format!("attribute {:?} is overridden twice", attribute.name),
-            ));
+            return Err(Error::rule(format!(
+                "attribute {:?} is overridden twice",
+                attribute.name
+            ))
+            .at(n));
         }
         let number: f64 = value.parse().expect("the parser only passes decimals");
         if !number.is_finite() {
-            return Err(Error::at(n, format!("value {value:?} is out of range")));
+            return Err(Error::rule(format!("value {value:?} is out of range")).at(n));
         }
         item.overrides.push((attribute, number));
     }
@@ -325,10 +308,9 @@ fn resolve_slot<'a>(
     catalog: &'a dyn Catalog,
 ) -> Result<Slot<'a>, Error> {
     match line {
-        Line::Empty(line) if fit.cargo_only => Err(Error::at(
-            line.number,
-            "a fit without a ship has no slots to keep empty",
-        )),
+        Line::Empty(line) if fit.cargo_only => {
+            Err(Error::rule("a fit without a ship has no slots to keep empty").at(line.number))
+        }
         Line::Empty(line) => Ok(Slot::Empty(line)),
         Line::Item(line) => resolve_item(line, fit, named, catalog).map(Slot::Item),
     }
@@ -360,7 +342,7 @@ fn check_cycles(fits: &[Fit<'_>]) -> Result<(), Error> {
                 continue;
             };
             if on_path[reference] {
-                return Err(Error::at(item.line.number, "a fit cannot contain itself"));
+                return Err(Error::rule("a fit cannot contain itself").at(item.line.number));
             }
             if !done[reference] {
                 on_path[reference] = true;
@@ -392,7 +374,7 @@ fn layout(slots: &[Slot<'_>], members: &[usize]) -> Result<Vec<Run>, Error> {
         let (number, _, index) = line_of(&slots[at]);
         let Some(index) = index else { continue };
         if pinned.insert(u64::from(index), at).is_some() {
-            return Err(Error::at(number, format!("slot {index} is pinned twice")));
+            return Err(Error::rule(format!("slot {index} is pinned twice")).at(number));
         }
     }
 
@@ -453,7 +435,7 @@ fn check_plugged(slots: &[Slot<'_>]) -> Result<(), Error> {
         let Slot::Item(item) = slot else { continue };
         if item.place.is_plugged() && !plugged.insert(item.r#type.id) {
             let message = format!("{:?} is plugged in twice", item.r#type.name);
-            return Err(Error::at(item.line.number, message));
+            return Err(Error::rule(message).at(item.line.number));
         }
     }
     Ok(())
