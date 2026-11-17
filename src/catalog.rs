@@ -48,6 +48,14 @@ pub enum Kind {
     Other,
 }
 
+impl Kind {
+    /// Whether a type of this kind can be the [`hull`](crate::EsfFit::hull) of a fit: true
+    /// for [`Hull`](Kind::Hull) and [`Container`](Kind::Container) only.
+    pub fn can_be_hull(self) -> bool {
+        matches!(self, Kind::Hull | Kind::Container)
+    }
+}
+
 /// One type, like "Rifter" or "200mm AutoCannon II", as the library needs it.
 ///
 /// With the SDE, most fields come from `types.jsonl`. [`kind`](TypeRecord::kind),

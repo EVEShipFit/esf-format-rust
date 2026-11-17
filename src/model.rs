@@ -9,6 +9,7 @@ use std::fmt;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct EsfFit {
     /// The type ID of the ship, structure or container, like 587 for the Rifter.
+    /// Only a type whose [`Kind::can_be_hull`](crate::Kind::can_be_hull) is true can be a hull.
     ///
     /// `None` for a fit without a ship, like the items in a contract: then every entry is
     /// stored in cargo, and the fit has no slots and no [`mode`](EsfFit::mode).
@@ -47,11 +48,11 @@ pub struct Entry {
     pub count: Option<u32>,
     /// The name of another fit in the same list, which this entry carries.
     ///
-    /// Only for a ship, structure or container. The other fit must have this entry's
-    /// [`type_id`](Entry::type_id) as its [`hull`](EsfFit::hull) and this as its
-    /// [`name`](EsfFit::name), ignoring case. For example, a Heron with fit name "Scout" and
-    /// [`Location::Frigate`] carries that fit in the Frigate Escape Bay. `None` means an
-    /// unfitted ship or an empty container.
+    /// Only for a type whose [`Kind::can_be_hull`](crate::Kind::can_be_hull) is true. The
+    /// other fit must have this entry's [`type_id`](Entry::type_id) as its
+    /// [`hull`](EsfFit::hull) and this as its [`name`](EsfFit::name), ignoring case. For
+    /// example, a Heron with fit name "Scout" and [`Location::Frigate`] carries that fit in
+    /// the Frigate Escape Bay. `None` means an unfitted ship or an empty container.
     pub fit_name: Option<String>,
     /// The type ID of the charge loaded into this item, like ammunition or a script. `None`
     /// for none.
