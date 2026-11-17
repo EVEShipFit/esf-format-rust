@@ -74,7 +74,7 @@ Each `Entry` is one line of the fit. `None` means the default:
 | `charge` | The charge loaded. | |
 | `charge_count` | How many charges. | A full load. |
 | `mutaplasmid` | The mutaplasmid applied. | |
-| `overrides` | Attribute values by attribute ID. | |
+| `overrides` | Dogma attribute values by attribute ID. | |
 | `state` | `State::Off`, `On` or `Heat`. | Active if the type can be, else on. |
 | `location` | `Cargo`, `Bay` or another hold; a rack, like `High` or `Tube`, for an empty slot or with `slot`. | Where the type goes by default. |
 | `slot` | The slot in the `location` rack, counting from 1. `load()` never sets it: it returns the rack in slot order, with empty slots between. | The next free slot. |
@@ -82,7 +82,7 @@ Each `Entry` is one line of the fit. `None` means the default:
 ## The Catalog
 
 The library holds no game data. You give it a `Catalog`: a type that looks
-up types and attributes in your copy of the SDE.
+up types and dogma attributes in your copy of the SDE.
 
 ```rust
 use esf::{AttributeRecord, Catalog, MutaplasmidRecord, TypeRecord};
@@ -123,7 +123,7 @@ fn type_names(types: &[SdeType]) -> HashMap<String, u32> {
     sde::name_index(types, |t| t.id, |t| &t.name, |t| t.published)
 }
 
-// effects: (effectID, effectCategoryID) in file order; attributes: (attributeID, value)
+// effects: (effectID, effectCategoryID) in file order; attributes: (dogma attributeID, value)
 fn record(
     t: &SdeType,
     category_id: u32,

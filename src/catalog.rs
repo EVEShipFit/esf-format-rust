@@ -1,4 +1,4 @@
-//! What esf/1 needs to know about types and attributes (SPEC §5, §6).
+//! What esf/1 needs to know about types and dogma attributes (SPEC §5, §6).
 
 use crate::{Error, number};
 
@@ -62,7 +62,7 @@ impl Kind {
 /// [`active`](TypeRecord::active) and [`squadron_size`](TypeRecord::squadron_size) also
 /// need `groups.jsonl`, `typeDogma.jsonl` and `dogmaEffects.jsonl`, through the helpers in
 /// [`sde`](crate::sde). Include every type in `types.jsonl`. A type with no row in
-/// `typeDogma.jsonl` has no effects and no attributes: give the helpers an empty list or map.
+/// `typeDogma.jsonl` has no effects and no dogma attributes: give the helpers an empty list or map.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TypeRecord {
     /// The type ID, like 587 for the Rifter. In the SDE this is `_key`.
@@ -86,7 +86,7 @@ pub struct TypeRecord {
     pub volume: f64,
     /// For a fighter, how many make up a full squadron. `None` for anything else.
     ///
-    /// In the SDE this is the attribute `fighterSquadronMaxSize`;
+    /// In the SDE this is the dogma attribute `fighterSquadronMaxSize`;
     /// [`sde::squadron_size`](crate::sde::squadron_size) reads it for you.
     pub squadron_size: Option<u32>,
 }
@@ -112,7 +112,7 @@ pub struct AttributeRecord {
 pub struct MutaplasmidRecord {
     /// The mutaplasmid's own type: the type whose ID is the entry's `_key`.
     pub mutaplasmid: TypeRecord,
-    /// The attributes the mutaplasmid changes, each with the base type's value before the
+    /// The dogma attributes the mutaplasmid changes, each with the base type's value before the
     /// change, as (attribute ID, value).
     ///
     /// The attribute IDs are the `_key` of each item in the entry's `attributeIDs`; its `min`
@@ -150,7 +150,7 @@ pub trait Catalog {
     /// Finds a type by its ID. Return `None` if there is no type with this ID.
     fn type_by_id(&self, type_id: u32) -> Option<&TypeRecord>;
 
-    /// Finds an attribute by its name, like "speedfactor".
+    /// Finds a dogma attribute by its name, like "speedfactor".
     ///
     /// Used to read attribute overrides, like the rolls on an abyssal module.
     ///
@@ -162,7 +162,7 @@ pub trait Catalog {
     /// Return `None` if no attribute has this name.
     fn attribute_by_name(&self, folded_name: &str) -> Option<&AttributeRecord>;
 
-    /// Finds an attribute by its ID.
+    /// Finds a dogma attribute by its ID.
     ///
     /// Used to write attribute overrides, like the rolls on an abyssal module.
     ///
