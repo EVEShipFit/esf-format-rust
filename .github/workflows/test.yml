@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: EVEShipFit/esf-format
-          ref: fd7c4f1a4413dae8757b691f6667e3b40bece648
+          ref: ae3c322abec5963bec73ab3ef06b4e9e683acaa8
           path: esf-format
 
       - name: Install Rust

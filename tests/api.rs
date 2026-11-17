@@ -592,7 +592,7 @@ fn shared_name_published_wins() {
 fn shared_name_by_type_id() {
     let fits = [rifter(vec![entry(AVATAR_UNPUBLISHED)])];
     let text = save(&fits).unwrap();
-    assert_eq!(text, "%esf/1\nRifter\n\n#50097\n");
+    assert_eq!(text, "%esf/1\nRifter\n\nAvatar#50097\n");
     assert_eq!(load(&text).unwrap(), fits);
     assert_eq!(
         load(esf::save_binary(&fits, &*CATALOG).unwrap()).unwrap(),
@@ -606,12 +606,16 @@ fn load_type_id() {
         charge: Some(EMP),
         ..entry(AUTOCANNON)
     }]);
-    assert_eq!(load("%esf/1\n#587\n#2889 :#21898\n").unwrap(), [fit]);
+    assert_eq!(
+        load("%esf/1\nRifter#587\n200mm  AutoCannon II#2889 :Republic Fleet EMP S#21898\n")
+            .unwrap(),
+        [fit]
+    );
 }
 
 #[test]
 fn load_invalid() {
-    let invalid: [(&[u8], &str); 6] = [
+    let invalid: [(&[u8], &str); 8] = [
         (b"", "the document is empty"),
         (
             b"%esf/1\nRifter\xED\xA0\x80\n",
@@ -622,8 +626,10 @@ fn load_invalid() {
             b"%esf/1\nRifter\n4294967295x Damage Control II\n4294967295x Damage Control II\n",
             "too large",
         ),
-        (b"%esf/1\nRifter\n#4294967296\n", "type ID is too large"),
-        (b"%esf/1\nRifter\n#999999999\n", "unknown type ID"),
+        (b"%esf/1\nRifter#4294967296\n", "type ID is too large"),
+        (b"%esf/1\nRifter#999999999\n", "unknown type ID"),
+        (b"%esf/1\nRifter#4294967295\n", "unknown type ID"),
+        (b"%esf/1\nRifter#605\n", "is 'Heron', not 'Rifter'"),
     ];
     for (data, message) in invalid {
         assert_error(load(data), message);

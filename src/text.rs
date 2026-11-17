@@ -13,16 +13,11 @@ pub(crate) struct EmptyLine {
     pub index: Option<u32>,
 }
 
-/// A type as written: by name, or by type ID (SPEC §6.13).
-pub(crate) enum TypeRef<'a> {
-    Name(Cow<'a, str>),
-    Id(u32),
-}
-
-impl Default for TypeRef<'_> {
-    fn default() -> Self {
-        TypeRef::Name(Cow::Borrowed(""))
-    }
+/// A type as written: its name, and the type ID after it if there is one (SPEC §6.13).
+#[derive(Default)]
+pub(crate) struct TypeRef<'a> {
+    pub name: Cow<'a, str>,
+    pub id: Option<u32>,
 }
 
 #[derive(Default)]
@@ -59,9 +54,16 @@ pub(crate) fn is_count(token: &str) -> bool {
         .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
 }
 
-pub(crate) fn is_type_id(name: &str) -> bool {
-    name.strip_prefix('#')
-        .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+fn split_type_id(name: &str) -> Option<(&str, &str)> {
+    let (name, digits) = name.rsplit_once('#')?;
+    (!digits.is_empty()
+        && digits.bytes().all(|b| b.is_ascii_digit())
+        && name.ends_with(|c| c != ' '))
+    .then_some((name, digits))
+}
+
+pub(crate) fn ends_in_type_id(name: &str) -> bool {
+    split_type_id(name).is_some()
 }
 
 struct Cursor<'a> {
@@ -217,18 +219,40 @@ impl<'a> Cursor<'a> {
     }
 
     fn type_ref(&mut self) -> Parsed<TypeRef<'a>> {
-        let quoted = self.peek() == Some(b'"');
-        let name = self.type_name()?;
-        if quoted || !is_type_id(&name) {
-            return Ok(TypeRef::Name(name));
+        if self.peek() == Some(b'"') {
+            let name = self.quoted()?;
+            let digits = self.rest().strip_prefix('#').map_or("", |rest| {
+                &rest[..rest.bytes().take_while(u8::is_ascii_digit).count()]
+            });
+            if digits.is_empty() {
+                return Ok(TypeRef { name, id: None });
+            }
+            self.i += 1 + digits.len();
+            let id = Some(self.type_id(digits)?);
+            return Ok(TypeRef { name, id });
         }
-        let digits = name[1..].trim_start_matches('0');
+        let name = self.type_name()?;
+        let Some((base, digits)) = split_type_id(&name) else {
+            return Ok(TypeRef { name, id: None });
+        };
+        let (len, id) = (base.len(), Some(self.type_id(digits)?));
+        let name = match name {
+            Cow::Borrowed(name) => Cow::Borrowed(&name[..len]),
+            Cow::Owned(mut name) => {
+                name.truncate(len);
+                Cow::Owned(name)
+            }
+        };
+        Ok(TypeRef { name, id })
+    }
+
+    fn type_id(&self, digits: &str) -> Parsed<u32> {
+        let digits = digits.trim_start_matches('0');
         if digits.is_empty() {
-            return Ok(TypeRef::Id(0));
+            return Ok(0);
         }
         digits
             .parse()
-            .map(TypeRef::Id)
             .or_else(|_| self.error("a type ID is too large"))
     }
 

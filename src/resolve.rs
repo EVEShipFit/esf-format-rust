@@ -123,17 +123,21 @@ pub(crate) fn mode_name<'a>(hull: &TypeRecord, mode: &'a TypeRecord) -> &'a str 
 
 fn type_named<'a>(
     catalog: &'a dyn Catalog,
-    name: &TypeRef<'_>,
+    TypeRef { name, id }: &TypeRef<'_>,
     line: usize,
 ) -> Result<&'a TypeRecord, Error> {
-    match name {
-        TypeRef::Name(name) => catalog
+    let Some(id) = *id else {
+        return catalog
             .type_by_name(&fold(name))
-            .ok_or_else(|| Error::catalog(format!("unknown type {name:?}")).at(line)),
-        TypeRef::Id(id) => catalog
-            .type_by_id(*id)
-            .ok_or_else(|| Error::catalog(format!("unknown type ID #{id}")).at(line)),
+            .ok_or_else(|| Error::catalog(format!("unknown type {name:?}")).at(line));
+    };
+    let t = catalog
+        .type_by_id(id)
+        .ok_or_else(|| Error::catalog(format!("unknown type ID #{id}")).at(line))?;
+    if fold(&t.name) != fold(name) {
+        return Err(Error::rule(format!("type ID #{id} is '{}', not '{name}'", t.name)).at(line));
     }
+    Ok(t)
 }
 
 fn pick<'a, T>(
