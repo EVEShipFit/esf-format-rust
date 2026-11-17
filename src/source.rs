@@ -1,9 +1,9 @@
 //! Fits as the text they stand for, and the check that their IDs match it (SPEC §10.2).
 
-use crate::canonical::{quote, quote_type};
+use crate::canonical::{quote, quote_type, type_ref};
 use crate::number;
 use crate::resolve::{Fit, Slot};
-use crate::{Catalog, Entry, Error, EsfFit, Location};
+use crate::{Catalog, Entry, Error, EsfFit, Location, TypeRecord};
 
 /// The (fit, entry) each line of the source text is, counting from 1.
 pub(crate) type Where = Vec<(usize, Option<usize>)>;
@@ -15,14 +15,26 @@ fn name(text: &str) -> Result<String, Error> {
     Ok(quote(text))
 }
 
-fn type_name(catalog: &dyn Catalog, type_id: u32, what: &str) -> Result<String, Error> {
+fn type_of<'a>(
+    catalog: &'a dyn Catalog,
+    type_id: u32,
+    what: &str,
+) -> Result<&'a TypeRecord, Error> {
     match catalog.type_by_id(type_id) {
         Some(t) if t.name.contains(['\r', '\n']) => Err(Error::format(format!(
             "the name of {what} type ID {type_id} contains CR or LF"
         ))),
-        Some(t) => Ok(quote_type(&t.name)),
+        Some(t) => Ok(t),
         None => Err(Error::catalog(format!("unknown {what} type ID {type_id}"))),
     }
+}
+
+fn type_name(catalog: &dyn Catalog, type_id: u32, what: &str) -> Result<String, Error> {
+    Ok(quote_type(&type_of(catalog, type_id, what)?.name))
+}
+
+fn type_ref_text(catalog: &dyn Catalog, type_id: u32, what: &str) -> Result<String, Error> {
+    Ok(type_ref(catalog, type_of(catalog, type_id, what)?))
 }
 
 fn entry(e: &Entry, catalog: &dyn Catalog) -> Result<String, Error> {
@@ -47,7 +59,7 @@ fn entry(e: &Entry, catalog: &dyn Catalog) -> Result<String, Error> {
         parts.push(format!("{count}x"));
     }
     parts.push(match e.type_id {
-        Some(type_id) => type_name(catalog, type_id, "item")?,
+        Some(type_id) => type_ref_text(catalog, type_id, "item")?,
         None => "-".to_string(),
     });
     if let Some(fit_name) = e.fit_name.as_deref().filter(|n| !n.is_empty()) {
@@ -57,7 +69,10 @@ fn entry(e: &Entry, catalog: &dyn Catalog) -> Result<String, Error> {
         let count = e
             .charge_count
             .map_or(String::new(), |count| format!("{count}x "));
-        parts.push(format!(":{count}{}", type_name(catalog, charge, "charge")?));
+        parts.push(format!(
+            ":{count}{}",
+            type_ref_text(catalog, charge, "charge")?
+        ));
     }
     if let Some(mutaplasmid) = e.mutaplasmid {
         parts.push(format!(
@@ -92,7 +107,7 @@ fn entry(e: &Entry, catalog: &dyn Catalog) -> Result<String, Error> {
 
 fn hull(fit: &EsfFit, catalog: &dyn Catalog) -> Result<String, Error> {
     let mut parts = vec![match fit.hull {
-        Some(hull) => type_name(catalog, hull, "hull")?,
+        Some(hull) => type_ref_text(catalog, hull, "hull")?,
         None => "-".to_string(),
     }];
     if let Some(fit_name) = fit.name.as_deref().filter(|n| !n.is_empty()) {

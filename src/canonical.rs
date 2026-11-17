@@ -4,7 +4,7 @@ use crate::catalog::{attribute_of, full_load};
 use crate::names::{fold, shortest_unique};
 use crate::number;
 use crate::resolve::{Fit, Item, Place, Slot, default_place, kind_place, mode_name};
-use crate::text::{SIGILS, is_count};
+use crate::text::{SIGILS, ends_in_type_id, is_count};
 use crate::{
     AttributeRecord, Catalog, Entry, Error, EsfFit, Location, MutaplasmidRecord, State, TypeRecord,
 };
@@ -17,6 +17,7 @@ pub(crate) fn needs_quotes(name: &str) -> bool {
     let first = name.split(' ').next().unwrap_or_default();
     first.starts_with(['-', '%'])
         || is_count(first)
+        || ends_in_type_id(name)
         || name
             .split(' ')
             .any(|word| word.as_bytes().first().is_none_or(|b| SIGILS.contains(b)))
@@ -27,6 +28,15 @@ pub(crate) fn quote_type(name: &str) -> String {
         quote(name)
     } else {
         name.to_string()
+    }
+}
+
+/// A type as text: its name, and `#` and its ID where the name resolves to another type.
+pub(crate) fn type_ref(catalog: &dyn Catalog, t: &TypeRecord) -> String {
+    let name = quote_type(&t.name);
+    match catalog.type_by_name(&fold(&t.name)) {
+        Some(found) if found.id == t.id => name,
+        _ => format!("{name}#{}", t.id),
     }
 }
 
@@ -93,6 +103,7 @@ impl<'a> CanonLine<'a> {
 
 pub(crate) struct CanonFit<'a> {
     pub hull: Option<&'a TypeRecord>,
+    pub hull_text: String,
     pub name: Option<&'a str>,
     pub mode: Option<&'a TypeRecord>,
     pub mode_text: Option<&'a str>,
@@ -102,11 +113,7 @@ pub(crate) struct CanonFit<'a> {
 impl CanonFit<'_> {
     fn write(&self, out: &mut String) {
         out.push_str("%esf/1\n");
-        out.push_str(
-            &self
-                .hull
-                .map_or("-".to_string(), |hull| quote_type(&hull.name)),
-        );
+        out.push_str(&self.hull_text);
         if let Some(name) = self.name {
             out.push(' ');
             out.push_str(&quote(name));
@@ -252,13 +259,13 @@ impl<'a> Context<'_, 'a> {
             _ => None,
         };
 
-        let mut parts = vec![quote_type(&item.r#type.name)];
+        let mut parts = vec![type_ref(self.catalog, item.r#type)];
         if let Some(name) = fit_name {
             parts.push(quote(name));
         }
         if let Some(charge) = item.charge {
             let count = charge_count.map_or(String::new(), |count| format!("{count}x "));
-            parts.push(format!(":{count}{}", quote_type(&charge.name)));
+            parts.push(format!(":{count}{}", type_ref(self.catalog, charge)));
         }
         if let Some(name) = mutaplasmid_name {
             parts.push(format!("+{}", quote_type(name)));
@@ -454,6 +461,9 @@ pub(crate) fn canonical_fit<'a>(
 
     Ok(CanonFit {
         hull: fit.hull,
+        hull_text: fit
+            .hull
+            .map_or("-".to_string(), |hull| type_ref(catalog, hull)),
         name: fit.name(),
         mode: fit.mode,
         mode_text,
@@ -475,6 +485,10 @@ mod tests {
         assert!(needs_quotes("3x Damage Control"));
         assert!(needs_quotes("Damage  Control"));
         assert!(needs_quotes("Damage @Control"));
+        assert!(needs_quotes("Foo#123"));
+        assert!(!needs_quotes("#85282"));
+        assert!(!needs_quotes("Swarm Overmind #0102"));
+        assert!(!needs_quotes("#System"));
         assert_eq!(
             quote_type("GDN-9 \"Nightstalker\""),
             "\"GDN-9 \"\"Nightstalker\"\"\""
