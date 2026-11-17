@@ -33,7 +33,7 @@ fn type_name(catalog: &dyn Catalog, type_id: u32, what: &str) -> Result<String, 
     Ok(quote_type(&type_of(catalog, type_id, what)?.name))
 }
 
-fn type_id_or_name(catalog: &dyn Catalog, type_id: u32, what: &str) -> Result<String, Error> {
+fn type_ref_text(catalog: &dyn Catalog, type_id: u32, what: &str) -> Result<String, Error> {
     Ok(type_ref(catalog, type_of(catalog, type_id, what)?))
 }
 
@@ -59,7 +59,7 @@ fn entry(e: &Entry, catalog: &dyn Catalog) -> Result<String, Error> {
         parts.push(format!("{count}x"));
     }
     parts.push(match e.type_id {
-        Some(type_id) => type_id_or_name(catalog, type_id, "item")?,
+        Some(type_id) => type_ref_text(catalog, type_id, "item")?,
         None => "-".to_string(),
     });
     if let Some(fit_name) = e.fit_name.as_deref().filter(|n| !n.is_empty()) {
@@ -71,7 +71,7 @@ fn entry(e: &Entry, catalog: &dyn Catalog) -> Result<String, Error> {
             .map_or(String::new(), |count| format!("{count}x "));
         parts.push(format!(
             ":{count}{}",
-            type_id_or_name(catalog, charge, "charge")?
+            type_ref_text(catalog, charge, "charge")?
         ));
     }
     if let Some(mutaplasmid) = e.mutaplasmid {
@@ -107,7 +107,7 @@ fn entry(e: &Entry, catalog: &dyn Catalog) -> Result<String, Error> {
 
 fn hull(fit: &EsfFit, catalog: &dyn Catalog) -> Result<String, Error> {
     let mut parts = vec![match fit.hull {
-        Some(hull) => type_id_or_name(catalog, hull, "hull")?,
+        Some(hull) => type_ref_text(catalog, hull, "hull")?,
         None => "-".to_string(),
     }];
     if let Some(fit_name) = fit.name.as_deref().filter(|n| !n.is_empty()) {
