@@ -67,7 +67,7 @@ pub struct Entry {
     /// [`type_id`](Entry::type_id) is then the base type the mutaplasmid applies to, and
     /// [`overrides`](Entry::overrides) holds the rolled values. `None` for a normal item.
     pub mutaplasmid: Option<u32>,
-    /// Attribute values that replace the type's own, as (attribute ID, value), like
+    /// Dogma attribute values that replace the type's own, as (attribute ID, value), like
     /// `(20, 524.0)` for speedFactor.
     ///
     /// Each value is the new base value, not a change on top of it. Attributes not listed

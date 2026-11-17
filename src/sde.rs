@@ -142,7 +142,7 @@ pub fn mode_hull(mode_name: &str, ship_names: &HashMap<String, u32>) -> Option<u
 /// Builds the name store that [`Catalog::type_by_name`](crate::Catalog::type_by_name) and
 /// [`Catalog::attribute_by_name`](crate::Catalog::attribute_by_name) look names up in.
 ///
-/// Give it every type, or every attribute, including unpublished ones, and say how to
+/// Give it every type, or every dogma attribute, including unpublished ones, and say how to
 /// read the ID, the name and whether it is published from each. Each name is
 /// case-folded with [`fold`], the same way the library does with the names in a fit.
 /// Where names are shared, the published one wins, then the lowest ID (§4.2).
