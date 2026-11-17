@@ -170,7 +170,7 @@ fn resolve_hull<'a>(block: &'a FitBlock<'a>, catalog: &'a dyn Catalog) -> Result
 
     let line = block.hull_line;
     let hull = type_named(catalog, name, line)?;
-    if !matches!(hull.kind, Kind::Hull | Kind::Container) {
+    if !hull.kind.can_be_hull() {
         return Err(Error::at(
             line,
             format!("{:?} is not a ship, structure or container", hull.name),
@@ -225,7 +225,7 @@ fn resolve_item<'a>(
     };
 
     if let Some(fit_name) = &line.fit_name {
-        if !matches!(t.kind, Kind::Hull | Kind::Container) {
+        if !t.kind.can_be_hull() {
             return Err(Error::at(n, format!("{:?} cannot take a fit name", t.name)));
         }
         match named.get(&(t.id, fold(fit_name))).map(Vec::as_slice) {

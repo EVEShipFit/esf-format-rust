@@ -157,6 +157,10 @@ fn entry(type_id: u32, flag: &str) -> esf::Entry {
 A flag that is not inside a ship, like `Hangar`, gives `None`; the example puts
 those items in the cargo hold.
 
+Only a ship, structure or container can be a fit's hull. Check
+`catalog.type_by_id(type_id).is_some_and(|t| t.kind.can_be_hull())` before you
+use a type as one.
+
 ## Tests
 
 The test cases live in [esf-format](https://github.com/EVEShipFit/esf-format):

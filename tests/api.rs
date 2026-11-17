@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 
 use catalog::JsonCatalog;
 use esf::{
-    AttributeRecord, Catalog, Entry, EsfFit, Location, MutaplasmidRecord, State, TypeRecord,
+    AttributeRecord, Catalog, Entry, EsfFit, Kind, Location, MutaplasmidRecord, State, TypeRecord,
 };
 
 static CATALOG: LazyLock<JsonCatalog> = LazyLock::new(|| JsonCatalog::new(&catalog::path()));
@@ -139,6 +139,17 @@ fn load_canonical() {
 fn load_text() {
     assert_eq!(load("%esf/1\nRifter\n").unwrap(), [rifter(vec![])]);
     assert_eq!(load(b"%esf/1\nRifter\n").unwrap(), [rifter(vec![])]);
+}
+
+#[test]
+fn only_hulls_and_containers_can_be_hulls() {
+    use Kind::*;
+    let kinds = [
+        Hull, Container, Mode, Sub, High, Mid, Low, Rig, Svc, Drone, Fighter, Charge, Implant,
+        Booster, Other,
+    ];
+    let hulls: Vec<Kind> = kinds.into_iter().filter(|k| k.can_be_hull()).collect();
+    assert_eq!(hulls, [Hull, Container]);
 }
 
 #[test]
