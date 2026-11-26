@@ -4,8 +4,8 @@ use std::sync::LazyLock;
 
 use catalog::JsonCatalog;
 use esf::{
-    AttributeRecord, Catalog, Entry, ErrorKind, EsfFit, Kind, Location, MutaplasmidRecord, State,
-    TypeRecord,
+    AttributeRecord, Catalog, Entry, ErrorKind, EsfFit, Extra, Kind, Location, MutaplasmidRecord,
+    State, TypeRecord,
 };
 
 static CATALOG: LazyLock<JsonCatalog> = LazyLock::new(|| JsonCatalog::new(&catalog::path()));
@@ -912,4 +912,116 @@ fn many_fits_are_linear() {
         "took {:?}",
         started.elapsed()
     );
+}
+
+#[test]
+fn load_document_text() {
+    let text = save(&[rifter(vec![])]).unwrap();
+    let data = format!("%fleet/1\r\nwing 1\r\n\r\n{text}%x-y/007\n\n");
+    let document = esf::load_document(&data, &*CATALOG).unwrap();
+    assert_eq!(document.fits, load(&data).unwrap());
+    assert_eq!(
+        document.extra,
+        [
+            Extra::Text {
+                name: "fleet".to_string(),
+                version: 1,
+                text: "wing 1\r\n\r\n".to_string(),
+            },
+            Extra::Text {
+                name: "x-y".to_string(),
+                version: 7,
+                text: "\n".to_string(),
+            },
+        ]
+    );
+
+    let document = esf::load_document(format!("{text}%fleet/2"), &*CATALOG).unwrap();
+    assert_eq!(
+        document.extra,
+        [Extra::Text {
+            name: "fleet".to_string(),
+            version: 2,
+            text: String::new(),
+        }]
+    );
+    assert!(
+        esf::load_document(&text, &*CATALOG)
+            .unwrap()
+            .extra
+            .is_empty()
+    );
+}
+
+#[test]
+fn load_document_invalid() {
+    let text = save(&[rifter(vec![])]).unwrap();
+    let load_document = |data: String| esf::load_document(data, &*CATALOG);
+    assert_error(
+        load_document(format!("%esf/2\n{text}")),
+        "unsupported version esf/2",
+    );
+    assert_error(
+        load_document(format!("{text}%fleet/99999999999\n")),
+        "the version of %fleet is too large",
+    );
+    assert!(load(format!("{text}%fleet/99999999999\n")).is_ok());
+    let huge = "%esf/1\nRifter\n%fleet/99999999999\n";
+    assert_eq!(load(huge).unwrap(), [rifter(vec![])]);
+    assert_error(esf::load_document(huge, &*CATALOG), "too large");
+    assert_error(load_document("%fleet/1\n".to_string()), "at least one fit");
+}
+
+#[test]
+fn binary_field_round_trip() {
+    let fits = [rifter(vec![])];
+    let data = [
+        esf::binary_field(2, b"fleet"),
+        esf::save_binary(&fits, &*CATALOG).unwrap(),
+        esf::binary_field(536_870_911, b""),
+    ]
+    .concat();
+    let document = esf::load_document(&data, &*CATALOG).unwrap();
+    assert_eq!(document.fits, fits);
+    assert_eq!(
+        document.extra,
+        [
+            Extra::Binary {
+                field: 2,
+                bytes: b"fleet".to_vec(),
+            },
+            Extra::Binary {
+                field: 536_870_911,
+                bytes: Vec::new(),
+            },
+        ]
+    );
+    assert_eq!(load(&data).unwrap(), fits);
+}
+
+#[test]
+fn load_document_skips_other_binary_fields() {
+    let fit = esf::save_binary(&[rifter(vec![])], &*CATALOG).unwrap();
+    let skipped: [&[u8]; 4] = [
+        b"\x11\x00\x00\x00\x00\x00\x00\x00\x00",
+        b"\x15\x00\x00\x00\x00",
+        b"\x1B\x22\x01\x00\x1C",
+        b"\x18\x05",
+    ];
+    for prefix in skipped {
+        let document = esf::load_document([prefix, &fit].concat(), &*CATALOG).unwrap();
+        assert!(
+            document.extra.is_empty(),
+            "{prefix:?}: {:?}",
+            document.extra
+        );
+    }
+}
+
+#[test]
+fn binary_field_rejects_field_numbers() {
+    for field in [0, 1, 536_870_912, u32::MAX] {
+        let result = std::panic::catch_unwind(|| esf::binary_field(field, b""));
+        assert!(result.is_err(), "field {field}");
+    }
 }

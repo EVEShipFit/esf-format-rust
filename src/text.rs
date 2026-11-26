@@ -487,17 +487,30 @@ fn header(text: &str) -> Option<(&str, &str)> {
     (name_ok && version_ok).then_some((name, version))
 }
 
-/// Split a text document into fits; other blocks are skipped.
-pub(crate) fn parse(data: &[u8]) -> Parsed<Vec<FitBlock<'_>>> {
-    let text = std::str::from_utf8(data)
+/// A block that is not a fit: its header's name and version, and the text after its header line.
+pub(crate) struct OtherBlock<'a> {
+    pub line: usize,
+    pub name: &'a str,
+    pub version: &'a str,
+    pub text: &'a str,
+}
+
+/// Split a text document into fits and the other blocks.
+pub(crate) fn parse(data: &[u8]) -> Parsed<(Vec<FitBlock<'_>>, Vec<OtherBlock<'_>>)> {
+    let whole = std::str::from_utf8(data)
         .map_err(|e| Error::format(format!("not valid UTF-8 at byte {}", e.valid_up_to())))?;
-    let text = text.strip_suffix('\n').unwrap_or(text);
+    let text = whole.strip_suffix('\n').unwrap_or(whole);
 
     let mut fits: Vec<FitBlock<'_>> = Vec::new();
+    let mut others: Vec<OtherBlock<'_>> = Vec::new();
+    let mut other_start = None;
     let mut in_fit = false;
     let mut header_line = None;
     let mut in_block = false;
+    let mut start = 0;
     for (raw, number) in text.split('\n').zip(1..) {
+        let line_start = start;
+        start = (start + raw.len() + 1).min(whole.len());
         let raw = raw.strip_suffix('\r').unwrap_or(raw);
         if raw.contains('\r') {
             return Err(Error::format("a CR must be followed by an LF").at(number));
@@ -510,6 +523,9 @@ pub(crate) fn parse(data: &[u8]) -> Parsed<Vec<FitBlock<'_>>> {
             if let Some(line) = header_line {
                 return Err(Error::format("a fit needs a hull line").at(line));
             }
+            if let Some(body) = other_start.take() {
+                others.last_mut().expect("in a block").text = &whole[body..line_start];
+            }
             in_block = true;
             in_fit = false;
             if name == "esf" {
@@ -519,6 +535,14 @@ pub(crate) fn parse(data: &[u8]) -> Parsed<Vec<FitBlock<'_>>> {
                     );
                 }
                 header_line = Some(number);
+            } else {
+                others.push(OtherBlock {
+                    line: number,
+                    name,
+                    version,
+                    text: "",
+                });
+                other_start = Some(start);
             }
             continue;
         }
@@ -547,8 +571,11 @@ pub(crate) fn parse(data: &[u8]) -> Parsed<Vec<FitBlock<'_>>> {
     if let Some(line) = header_line {
         return Err(Error::format("a fit needs a hull line").at(line));
     }
+    if let Some(body) = other_start {
+        others.last_mut().expect("in a block").text = &whole[body..];
+    }
     if fits.is_empty() {
         return Err(Error::format("a document holds at least one fit"));
     }
-    Ok(fits)
+    Ok((fits, others))
 }

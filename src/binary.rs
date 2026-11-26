@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use crate::wire::{self, Reader, Value};
-use crate::{Entry, Error, EsfFit, Location, State};
+use crate::{Entry, Error, EsfFit, Extra, Location, State};
 
 fn encode_entry(out: &mut Vec<u8>, entry: &Entry) {
     wire::uint(out, 1, entry.type_id);
@@ -155,8 +155,10 @@ fn decode_fit(data: &[u8]) -> Result<EsfFit, Error> {
     Ok(fit)
 }
 
-pub(crate) fn decode(data: &[u8]) -> Result<Vec<EsfFit>, Error> {
+/// The fits of a binary document, and its other length-delimited fields.
+pub(crate) fn decode(data: &[u8]) -> Result<(Vec<EsfFit>, Vec<Extra>), Error> {
     let mut fits = Vec::new();
+    let mut extra = Vec::new();
     let mut reader = Reader::new(data);
     while !reader.done() {
         match reader.field()? {
@@ -166,11 +168,15 @@ pub(crate) fn decode(data: &[u8]) -> Result<Vec<EsfFit>, Error> {
                     "binary: Document.fits has the wrong wire type",
                 ));
             }
+            (field, Value::Len(b)) => extra.push(Extra::Binary {
+                field,
+                bytes: b.to_vec(),
+            }),
             _ => {}
         }
     }
     if fits.is_empty() {
         return Err(Error::format("binary: a document holds at least one fit"));
     }
-    Ok(fits)
+    Ok((fits, extra))
 }

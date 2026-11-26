@@ -90,6 +90,47 @@ pub struct Entry {
     pub slot: Option<u32>,
 }
 
+/// A whole document, as [`load_document`](crate::load_document) reads it: its fits, and the
+/// data the library does not know.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Document {
+    /// The fits, the same as [`load`](crate::load) returns.
+    pub fits: Vec<EsfFit>,
+    /// The blocks and binary fields that are not fits, in the order they are in the document.
+    ///
+    /// Empty when the document holds only fits.
+    pub extra: Vec<Extra>,
+}
+
+/// Data in a document that is not a fit, like a fleet stored next to its fits.
+///
+/// To write it back, add it to what [`save`](crate::save) or
+/// [`save_binary`](crate::save_binary) returns. For text, write the header line
+/// `%name/version` and a line ending, then the text, and end the text with a line ending if
+/// it has none. For binary, append [`binary_field`](crate::binary_field). Two documents put
+/// one after the other are one document.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Extra {
+    /// A block in a text document whose header is not `%esf/N`, like `%fleet/1`.
+    Text {
+        /// The name in the header, like "fleet".
+        name: String,
+        /// The version in the header, like 1. Leading zeros are dropped: `%fleet/01` gives 1.
+        version: u32,
+        /// Everything after the header line, up to the next header line or the end of the
+        /// document, exactly as written. It keeps its line endings and blank lines, and can be
+        /// empty.
+        text: String,
+    },
+    /// A length-delimited field of a binary document, other than its fits (field 1).
+    Binary {
+        /// The field number.
+        field: u32,
+        /// The content of the field, without its key and length.
+        bytes: Vec<u8>,
+    },
+}
+
 /// Whether an item is offline, online or running, when that is not its default (esf/1 spec
 /// §6.4).
 ///

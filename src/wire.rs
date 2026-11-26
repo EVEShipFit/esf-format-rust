@@ -9,6 +9,8 @@ const SGROUP: u8 = 3;
 const EGROUP: u8 = 4;
 const I32: u8 = 5;
 
+pub(crate) const MAX_FIELD: u32 = (1 << 29) - 1;
+
 fn invalid(why: &str) -> Error {
     Error::format(format!("binary: not valid Protocol Buffers ({why})"))
 }

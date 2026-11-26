@@ -1,10 +1,24 @@
-//! The program the esf-format test runner calls: program check|canonical|binary.
+//! The program the esf-format test runner calls: program check|canonical|binary|extra.
 
 #[path = "../tests/catalog/mod.rs"]
 mod catalog;
 
 use std::io::{Read, Write};
 use std::process::ExitCode;
+
+fn extra_line(extra: &esf::Extra) -> String {
+    let json = match extra {
+        esf::Extra::Text {
+            name,
+            version,
+            text,
+        } => serde_json::json!({"name": name, "version": version, "text": text}),
+        esf::Extra::Binary { field, bytes } => {
+            serde_json::json!({"field": field, "bytes": esf::to_base64url(bytes)})
+        }
+    };
+    format!("{json}\n")
+}
 
 fn main() -> ExitCode {
     let command = std::env::args().nth(1).unwrap_or_default();
@@ -14,11 +28,21 @@ fn main() -> ExitCode {
         .read_to_end(&mut input)
         .expect("stdin is readable");
 
-    let output = esf::load(&input, &catalog).and_then(|fits| match command.as_str() {
-        "canonical" => esf::save(&fits, &catalog).map(String::into_bytes),
-        "binary" => esf::save_binary(&fits, &catalog),
-        _ => Ok(Vec::new()),
-    });
+    let output = match command.as_str() {
+        "extra" => esf::load_document(&input, &catalog).map(|document| {
+            document
+                .extra
+                .iter()
+                .map(extra_line)
+                .collect::<String>()
+                .into_bytes()
+        }),
+        _ => esf::load(&input, &catalog).and_then(|fits| match command.as_str() {
+            "canonical" => esf::save(&fits, &catalog).map(String::into_bytes),
+            "binary" => esf::save_binary(&fits, &catalog),
+            _ => Ok(Vec::new()),
+        }),
+    };
     match output {
         Ok(output) => {
             std::io::stdout()
