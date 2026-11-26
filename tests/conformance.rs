@@ -6,6 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use catalog::JsonCatalog;
+use esf::Extra;
 
 fn cases(root: &Path, kind: &str) -> Vec<PathBuf> {
     let mut cases: Vec<PathBuf> = fs::read_dir(root.join(kind))
@@ -31,11 +32,43 @@ fn input(path: &Path) -> Vec<u8> {
     }
 }
 
+fn expected_extra(path: &Path) -> Vec<Extra> {
+    let Ok(text) = fs::read_to_string(path.join("extra.toml")) else {
+        return Vec::new();
+    };
+    let table: toml::Table = text.parse().unwrap();
+    let int = |value: &toml::Value| value.as_integer().unwrap().try_into().unwrap();
+    table["extra"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|extra| match extra.get("field") {
+            Some(field) => Extra::Binary {
+                field: int(field),
+                bytes: esf::from_base64url(extra["bytes"].as_str().unwrap()).unwrap(),
+            },
+            None => Extra::Text {
+                name: extra["name"].as_str().unwrap().to_string(),
+                version: int(&extra["version"]),
+                text: extra["text"].as_str().unwrap().to_string(),
+            },
+        })
+        .collect()
+}
+
 fn check_valid(path: &Path, catalog: &JsonCatalog) -> Result<(), String> {
     let canonical = fs::read_to_string(path.join("canonical.esf")).unwrap();
     let binary =
         esf::from_base64url(&fs::read_to_string(path.join("canonical.b64")).unwrap()).unwrap();
     let fits = esf::load(input(path), catalog).map_err(|e| format!("load: {e}"))?;
+    let document =
+        esf::load_document(input(path), catalog).map_err(|e| format!("load_document: {e}"))?;
+    if document.fits != fits {
+        return Err(format!("load_document: got fits {:?}", document.fits));
+    }
+    if document.extra != expected_extra(path) {
+        return Err(format!("load_document: got extra {:?}", document.extra));
+    }
     let round_trip =
         |data: &[u8]| esf::load(data, catalog).and_then(|fits| esf::save(&fits, catalog));
 
@@ -84,6 +117,12 @@ fn test_cases() {
     for case in &invalid {
         if let Ok(fits) = esf::load(input(case), &catalog) {
             failures.push(format!("{}: accepted {fits:?}", case.display()));
+        }
+        if let Ok(document) = esf::load_document(input(case), &catalog) {
+            failures.push(format!(
+                "{}: load_document accepted {document:?}",
+                case.display()
+            ));
         }
     }
 

@@ -79,6 +79,38 @@ Each `Entry` is one line of the fit. `None` means the default:
 | `location` | `Cargo`, `Bay` or another hold; a rack, like `High` or `Tube`, for an empty slot or with `slot`. | Where the type goes by default. |
 | `slot` | The slot in the `location` rack, counting from 1. `load()` never sets it: it returns the rack in slot order, with empty slots between. | The next free slot. |
 
+## Other data
+
+A document can hold more than fits. `load()` skips text blocks with another
+header, like `%fleet/1`, and binary fields it does not know.
+`load_document()` gives them back, in document order:
+
+```rust
+use esf::{Document, EsfFit, Extra};
+
+fn example(fits: &[EsfFit], catalog: &dyn esf::Catalog) -> Result<(), esf::Error> {
+    // Text: add the block after the fits.
+    let text = esf::save(fits, catalog)? + "%fleet/1\nwing 1\n";
+    let Document { fits, extra } = esf::load_document(&text, catalog)?;
+    assert_eq!(extra, [Extra::Text {
+        name: "fleet".to_string(),
+        version: 1,
+        text: "wing 1\n".to_string(),
+    }]);
+
+    // Binary: add a field after the fits. Field 1 holds the fits.
+    let mut data = esf::save_binary(&fits, catalog)?;
+    data.extend(esf::binary_field(2, b"wing 1"));
+    let document = esf::load_document(&data, catalog)?;
+    assert_eq!(document.extra, [Extra::Binary { field: 2, bytes: b"wing 1".to_vec() }]);
+    Ok(())
+}
+```
+
+`Extra::Text` holds the text after the header line exactly as written.
+`Extra::Binary` holds the content of a length-delimited field; other binary
+fields are still skipped.
+
 ## The Catalog
 
 The library holds no game data. You give it a `Catalog`: a type that looks
@@ -174,7 +206,7 @@ use a type as one.
 The test cases live in [esf-format](https://github.com/EVEShipFit/esf-format):
 
 ```sh
-git clone --branch v1.0 https://github.com/EVEShipFit/esf-format
+git clone --branch v1.3 https://github.com/EVEShipFit/esf-format
 cargo build --example program
 uv run --project esf-format/tools esf-test -- target/debug/examples/program
 cargo test
