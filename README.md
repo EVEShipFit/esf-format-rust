@@ -206,7 +206,7 @@ use a type as one.
 The test cases live in [esf-format](https://github.com/EVEShipFit/esf-format):
 
 ```sh
-git clone --branch v1.3 https://github.com/EVEShipFit/esf-format
+git clone https://github.com/EVEShipFit/esf-format
 cargo build --example program
 uv run --project esf-format/tools esf-test -- target/debug/examples/program
 cargo test

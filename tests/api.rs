@@ -966,6 +966,9 @@ fn load_document_invalid() {
         "the version of %fleet is too large",
     );
     assert!(load(format!("{text}%fleet/99999999999\n")).is_ok());
+    let huge = "%esf/1\nRifter\n%fleet/99999999999\n";
+    assert_eq!(load(huge).unwrap(), [rifter(vec![])]);
+    assert_error(esf::load_document(huge, &*CATALOG), "too large");
     assert_error(load_document("%fleet/1\n".to_string()), "at least one fit");
 }
 

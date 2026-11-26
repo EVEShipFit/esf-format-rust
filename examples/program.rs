@@ -28,20 +28,21 @@ fn main() -> ExitCode {
         .read_to_end(&mut input)
         .expect("stdin is readable");
 
-    let output = esf::load_document(&input, &catalog).and_then(|document| {
-        let fits = document.fits;
-        match command.as_str() {
-            "canonical" => esf::save(&fits, &catalog).map(String::into_bytes),
-            "binary" => esf::save_binary(&fits, &catalog),
-            "extra" => Ok(document
+    let output = match command.as_str() {
+        "extra" => esf::load_document(&input, &catalog).map(|document| {
+            document
                 .extra
                 .iter()
                 .map(extra_line)
                 .collect::<String>()
-                .into_bytes()),
+                .into_bytes()
+        }),
+        _ => esf::load(&input, &catalog).and_then(|fits| match command.as_str() {
+            "canonical" => esf::save(&fits, &catalog).map(String::into_bytes),
+            "binary" => esf::save_binary(&fits, &catalog),
             _ => Ok(Vec::new()),
-        }
-    });
+        }),
+    };
     match output {
         Ok(output) => {
             std::io::stdout()
